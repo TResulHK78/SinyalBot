@@ -92,13 +92,20 @@ if __name__ == "__main__":
         send_telegram_message(baslangic_mesaji)
         
         while True:
+            # Döngü başlarken bildirim
+            döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
             print("--- Yeni Tarama Döngüsü Başlıyor ---")
+            send_telegram_message(döngü_baslangic)
             
             for symbol in SYMBOLS:
                 analyze_and_signal(symbol)
                 time.sleep(1) # API limitleri için kısa bekleme
                 
+            # Döngü biterken bildirim
+            döngü_bitis = "✅ **LİSTE TARANDI**\nBot 1 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
             print("Tüm liste tarandı. 60 saniye bekleniyor...")
+            send_telegram_message(döngü_bitis)
+            
             time.sleep(60)
 
     except Exception as e:
