@@ -124,27 +124,39 @@ def analyze_and_signal(symbol):
         print(f"   -> {symbol} analiz edilirken hata: {e}")
 
 # --- ANA DÖNGÜ ---
+import traceback # En üste eklediğinden emin ol
+
+# ... diğer fonksiyonların ...
+
+# --- ANA DÖNGÜ ---
 if __name__ == "__main__":
-    baslangic_mesaji = f"🚀 **BOT BAŞLATILDI**\nİzlenen Coin Sayısı: {len(SYMBOLS)}\n---------------------------------"
-    print(baslangic_mesaji)
-    send_telegram_message(baslangic_mesaji)
-    
-    while True:
-        # Döngü başlarken ayırıcı bir mesaj atalım
-        döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
-        print("--- Yeni Tarama Döngüsü Başlıyor ---")
-        send_telegram_message(döngü_baslangic)
+    try: # <--- İşte eksik olan bu!
+        baslangic_mesaji = f"🚀 **BOT BAŞLATILDI**\nİzlenen Coin Sayısı: {len(SYMBOLS)}\n---------------------------------"
+        print(baslangic_mesaji)
+        send_telegram_message(baslangic_mesaji)
         
-        # Listedeki her bir coini sırayla kontrol et
-        for symbol in SYMBOLS:
-            analyze_and_signal(symbol)
-            # Binance API engeli yememek için bekleme
-            time.sleep(1)
+        while True:
+            # Döngü başlarken ayırıcı bir mesaj atalım
+            döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
+            print("--- Yeni Tarama Döngüsü Başlıyor ---")
+            send_telegram_message(döngü_baslangic)
             
-        # Döngü bittiğinde bilgi mesajı atalım
-        döngü_bitis = "✅ **LİSTE TARANDI**\nBot 1 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
-        print("Tüm liste tarandı. 1 dakika bekleniyor...")
-        send_telegram_message(döngü_bitis)
-        
-        # Bekleme süresi
-        time.sleep(60)
+            # Listedeki her bir coini sırayla kontrol et
+            for symbol in SYMBOLS:
+                analyze_and_signal(symbol)
+                time.sleep(1)
+                
+            # Döngü bittiğinde bilgi mesajı atalım
+            döngü_bitis = "✅ **LİSTE TARANDI**\nBot 1 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
+            print("Tüm liste tarandı. 1 dakika bekleniyor...")
+            send_telegram_message(döngü_bitis)
+            
+            # Bekleme süresi
+            time.sleep(60)
+
+    except Exception as e:
+        # Hata anında Telegram'a detaylı mesaj at
+        hata_mesaji = f"🚨 **BOT ÇÖKTÜ!**\n\nHata Detayı:\n{traceback.format_exc()}"
+        send_telegram_message(hata_mesaji)
+        print(hata_mesaji)
+        raise e # Botu tamamen durdur ki Railway restart atabilsin
