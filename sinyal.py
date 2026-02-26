@@ -63,7 +63,7 @@ def analyze_and_signal(symbol):
         print(f"Analiz hatası: {e}")
 
 # İzlemek istediğiniz coinleri buraya ekleyebilirsiniz
-SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "BIO/USDT"]
+SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT",]
 
 TIMEFRAME = "15m"  # 15 dakikalık mumlar
 LIMIT = 200       # Analiz için geriye dönük 200 mum
@@ -160,4 +160,5 @@ if __name__ == "__main__":
         send_telegram_message(hata_mesaji)
         print(hata_mesaji)
         raise e # Botu tamamen durdur ki Railway restart atabilsin
+
 
