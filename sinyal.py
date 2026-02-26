@@ -102,14 +102,15 @@ if __name__ == "__main__":
                 time.sleep(1) # API limitleri için kısa bekleme
                 
             # Döngü biterken bildirim
-            döngü_bitis = "✅ **LİSTE TARANDI**\nBot 1 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
-            print("Tüm liste tarandı. 60 saniye bekleniyor...")
+            döngü_bitis = "✅ **LİSTE TARANDI**\nBot 5 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
+            print("Tüm liste tarandı. 300 saniye bekleniyor...")
             send_telegram_message(döngü_bitis)
             
-            time.sleep(60)
+            time.sleep(300)
 
     except Exception as e:
         hata_mesaji = f"🚨 **BOT ÇÖKTÜ!**\n\nHata Detayı:\n{traceback.format_exc()}"
         send_telegram_message(hata_mesaji)
         print(hata_mesaji)
         raise e
+
