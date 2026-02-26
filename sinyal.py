@@ -12,55 +12,55 @@ CHAT_ID = "@rhksinyal"
 son_sinyal_zamanlari = {}
 
 def analyze_and_signal(symbol):
-    """Belirtilen coin için hafızalı analiz yapar"""
     print(f"🔍 {symbol} taranıyor...")
-    
     try:
-        # Verileri çek
-        bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
+        # EMA 200 için en az 200-250 mumluk veri lazım
+        bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=250)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # RSI Hesapla
+        # Göstergeleri Hesapla
         df['RSI'] = ta.rsi(df['close'], length=14)
+        df['EMA_200'] = ta.ema(df['close'], length=200) # Trend Filtresi
+        df['VOL_SMA'] = ta.sma(df['volume'], length=20) # Hacim Filtresi
         
-        # Anlık/Hareketli muma (-1) bakıyoruz
-        # ÖNEMLİ: Mumun kimlik numarası (zaman damgası) burasıdır
-        latest_timestamp = df['timestamp'].iloc[-1] 
-        latest_rsi = df['RSI'].iloc[-1]
-        latest_close = df['close'].iloc[-1]
+        latest = df.iloc[-1]
         
-        print(f"   -> Fiyat: {latest_close} | RSI: {latest_rsi:.2f}")
-
-        # --- HAFIZALI SİNYAL MANTIĞI ---
+        # Filtreleri Mantıksal Değişkenlere Ata
+        is_uptrend = latest['close'] > latest['EMA_200']
+        is_high_volume = latest['volume'] > latest['VOL_SMA']
         
-        # 1. AL SİNYALİ (RSI <= 30)
-        if latest_rsi <= 30:
-            # Hafızayı Kontrol Et: Bu muma daha önce mesaj attık mı?
-            if son_sinyal_zamanlari.get(symbol) != latest_timestamp:
-                mesaj = f"🟢 **ERKEN AL SİNYALİ (DİP)**\n\nCoin: {symbol}\nFiyat: {latest_close}\nRSI: {latest_rsi:.2f}\nDurum: Anlık Aşırı Satım!"
+        # --- AL SİNYALİ ŞARTLARI ---
+        # 1. RSI 30 veya altı (Ucuzluk)
+        # 2. Fiyat EMA 200'ün üzerinde (Trend pozitif)
+        # 3. Hacim ortalamanın üzerinde (Güçlü katılım)
+        if latest['RSI'] <= 30 and is_uptrend and is_high_volume:
+            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
+                mesaj = (f"🟢 **GÜÇLÜ AL SİNYALİ**\n"
+                         f"Coin: {symbol}\n"
+                         f"Fiyat: {latest['close']}\n"
+                         f"RSI: {latest['RSI']:.2f}\n"
+                         f"Trend: YUKARI (EMA200 üstü)\n"
+                         f"Hacim: GÜÇLÜ")
                 send_telegram_message(mesaj)
-                print(f"   -> ✅ AL Sinyali gönderildi: {symbol}")
-                
-                # Mesajı attık, hafızayı güncelle (Artık bu mumu tanıyoruz)
-                son_sinyal_zamanlari[symbol] = latest_timestamp
-            else:
-                print(f"   -> ⏳ {symbol} için bu mumda zaten mesaj atıldı. Bekleniyor.")
-
-        # 2. SAT SİNYALİ (RSI >= 70)
-        elif latest_rsi >= 70:
-            # Hafızayı Kontrol Et: Bu muma daha önce mesaj attık mı?
-            if son_sinyal_zamanlari.get(symbol) != latest_timestamp:
-                mesaj = f"🔴 **ERKEN SAT SİNYALİ (TEPE)**\n\nCoin: {symbol}\nFiyat: {latest_close}\nRSI: {latest_rsi:.2f}\nDurum: Anlık Aşırı Alım!"
+                son_sinyal_zamanlari[symbol] = latest['timestamp']
+        
+        # --- SAT SİNYALİ ŞARTLARI ---
+        # 1. RSI 70 veya üstü (Pahalı)
+        # 2. Fiyat EMA 200'ün altında (Trend negatif)
+        # 3. Hacim ortalamanın üzerinde (Güçlü katılım)
+        elif latest['RSI'] >= 70 and not is_uptrend and is_high_volume:
+            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
+                mesaj = (f"🔴 **GÜÇLÜ SAT SİNYALİ**\n"
+                         f"Coin: {symbol}\n"
+                         f"Fiyat: {latest['close']}\n"
+                         f"RSI: {latest['RSI']:.2f}\n"
+                         f"Trend: AŞAĞI (EMA200 altı)\n"
+                         f"Hacim: GÜÇLÜ")
                 send_telegram_message(mesaj)
-                print(f"   -> ✅ SAT Sinyali gönderildi: {symbol}")
-                
-                # Mesajı attık, hafızayı güncelle
-                son_sinyal_zamanlari[symbol] = latest_timestamp
-            else:
-                print(f"   -> ⏳ {symbol} için bu mumda zaten mesaj atıldı. Bekleniyor.")
+                son_sinyal_zamanlari[symbol] = latest['timestamp']
                 
     except Exception as e:
-        print(f"   -> {symbol} analiz edilirken hata: {e}")
+        print(f"Analiz hatası: {e}")
 
 # İzlemek istediğiniz coinleri buraya ekleyebilirsiniz
 SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "BIO/USDT"]
@@ -160,3 +160,4 @@ if __name__ == "__main__":
         send_telegram_message(hata_mesaji)
         print(hata_mesaji)
         raise e # Botu tamamen durdur ki Railway restart atabilsin
+
