@@ -149,7 +149,7 @@ def analyze_and_signal(symbol):
         
         latest = df.iloc[-1]
         close_price = latest['close']
-        is_uptrend = close_price > latest['EMA_200']
+        is_uptrend = close_price > latest['EMA_100']
         is_high_volume = latest['volume'] > latest['VOL_SMA']
 
         # 1. DURUM RAPORU (İçimiz rahat etsin diye)
@@ -157,7 +157,7 @@ def analyze_and_signal(symbol):
                         f"----------------------------\n"
                         f"Fiyat: {close_price:.4f}\n"
                         f"RSI: {latest['RSI']:.2f}\n"
-                        f"Trend: {'🟢 YUKARI' if is_uptrend else '🔴 AŞAĞI'} (EMA 200)\n"
+                        f"Trend: {'🟢 YUKARI' if is_uptrend else '🔴 AŞAĞI'} (EMA 100)\n"
                         f"Hacim: {'💪 GÜÇLÜ' if is_high_volume else '📉 DÜŞÜK'}\n"
                         f"----------------------------")
         send_telegram_message(rapor_mesaji)
