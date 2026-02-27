@@ -142,7 +142,7 @@ def analyze_and_signal(symbol):
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
         df['RSI'] = ta.rsi(df['close'], length=14)
-        df['EMA_200'] = ta.ema(df['close'], length=200)
+        df['EMA_100'] = ta.ema(df['close'], length=100)
         df['VOL_SMA'] = ta.sma(df['volume'], length=20)
         
         latest = df.iloc[-1]
