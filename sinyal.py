@@ -10,111 +10,218 @@ TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
 SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
 TIMEFRAME = "15m"
-LIMIT = 1000  # Binance grafiği ile birebir eşleşme için
+LIMIT = 1000
 
-# --- BİNANCE FUTURES (VADELİ İŞLEMLER) BAĞLANTISI ---
+# --- RİSK VE TAKİP AYARLARI ---
+STOP_LOSS_YUZDE = 0.01  # %1 Zarar Kes
+TAKE_PROFIT_YUZDE = 0.02 # %2 Kâr Al
+
+# Kârı Koruma (Trailing) Ayarları
+KAR_KORUMA_TETIKLEYICI = 0.008  # Fiyat %0.8 kâra ulaşırsa koruma kalkanı açılır
+KAR_KORUMA_MESAFESI = 0.004     # Zirveden %0.4 düşerse "Kârı al kaç" der
+
+# --- BİNANCE FUTURES BAĞLANTISI ---
 exchange = ccxt.binance({
     'enableRateLimit': True,
-    'options': {
-        'defaultType': 'future'  # Botu spot piyasadan kaldıraçlı piyasaya geçiren ayar
-    }
+    'options': {'defaultType': 'future'}
 })
 
+# Botun Hafızası
+aktif_islemler = {}  # Hangi coinde işlemdeyiz, giriş fiyatımız ne, en yüksek nereyi gördü?
 son_sinyal_zamanlari = {}
 
 def send_telegram_message(message):
-    """Telegram'a mesaj gönderir"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload)
     except Exception as e:
-        print(f"Mesaj gönderme hatası: {e}")
+        print(f"Mesaj hatası: {e}")
+
+def aktif_islemi_takip_et(symbol):
+    """15 saniyede bir işlemde olduğumuz coini denetler"""
+    try:
+        # fetch_ticker çok hızlıdır ve API'yi yormaz (sadece anlık fiyatı getirir)
+        ticker = exchange.fetch_ticker(symbol)
+        guncel_fiyat = ticker['last']
+        
+        islem = aktif_islemler[symbol]
+        yon = islem['yon']
+        giris = islem['giris_fiyati']
+        
+        if yon == 'LONG':
+            # En yüksek fiyatı güncelle
+            if guncel_fiyat > islem['en_iyi_fiyat']:
+                aktif_islemler[symbol]['en_iyi_fiyat'] = guncel_fiyat
+            
+            en_iyi = aktif_islemler[symbol]['en_iyi_fiyat']
+            
+            # 1. KÂR AL (Take Profit) Kontrolü
+            if guncel_fiyat >= islem['hedef']:
+                mesaj = f"✅ **HEDEF VURULDU! (LONG)**\n{symbol} %2 Kâr Hedefine Ulaştı!\nKapanış: {guncel_fiyat:.4f}\nİşlemi Kapat."
+                send_telegram_message(mesaj)
+                del aktif_islemler[symbol] # İşlemi hafızadan sil
+                
+            # 2. ZARAR KES (Stop Loss) Kontrolü
+            elif guncel_fiyat <= islem['stop']:
+                mesaj = f"🛑 **STOP PATLADI (LONG)**\n{symbol} %1 Zarara Ulaştı.\nKapanış: {guncel_fiyat:.4f}\nSağlık olsun, işlemi kapat."
+                send_telegram_message(mesaj)
+                del aktif_islemler[symbol]
+                
+            # 3. KÂRI KORU (Kârdan Zarar Etmemek İçin Erken Çıkış)
+            elif en_iyi >= giris * (1 + KAR_KORUMA_TETIKLEYICI): # %0.8 kârı gördüysek
+                if guncel_fiyat <= en_iyi * (1 - KAR_KORUMA_MESAFESI): # Zirveden %0.4 düştüyse
+                    mesaj = (f"⚠️ **KÂRI AL VE KAÇ! (LONG)**\n"
+                             f"----------------------------\n"
+                             f"Coin: {symbol}\n"
+                             f"Durum: %2 hedefe gidiyordu ama güç kaybetti.\n"
+                             f"Zirve Görülmüş: {en_iyi:.4f}\n"
+                             f"Güncel Düşüş: {guncel_fiyat:.4f}\n"
+                             f"👉 **Kârdan zarar etmemek için işlemi hemen kapat!**")
+                    send_telegram_message(mesaj)
+                    del aktif_islemler[symbol]
+
+        elif yon == 'SHORT':
+            # En düşük fiyatı güncelle (Short için iyi fiyat düşüktür)
+            if guncel_fiyat < islem['en_iyi_fiyat']:
+                aktif_islemler[symbol]['en_iyi_fiyat'] = guncel_fiyat
+                
+            en_iyi = aktif_islemler[symbol]['en_iyi_fiyat']
+            
+            # 1. KÂR AL (TP)
+            if guncel_fiyat <= islem['hedef']:
+                mesaj = f"✅ **HEDEF VURULDU! (SHORT)**\n{symbol} %2 Kâr Hedefine Ulaştı!\nKapanış: {guncel_fiyat:.4f}\nİşlemi Kapat."
+                send_telegram_message(mesaj)
+                del aktif_islemler[symbol]
+                
+            # 2. ZARAR KES (SL)
+            elif guncel_fiyat >= islem['stop']:
+                mesaj = f"🛑 **STOP PATLADI (SHORT)**\n{symbol} %1 Zarara Ulaştı.\nKapanış: {guncel_fiyat:.4f}\nSağlık olsun, işlemi kapat."
+                send_telegram_message(mesaj)
+                del aktif_islemler[symbol]
+                
+            # 3. KÂRI KORU (Erken Çıkış)
+            elif en_iyi <= giris * (1 - KAR_KORUMA_TETIKLEYICI):
+                if guncel_fiyat >= en_iyi * (1 + KAR_KORUMA_MESAFESI):
+                    mesaj = (f"⚠️ **KÂRI AL VE KAÇ! (SHORT)**\n"
+                             f"----------------------------\n"
+                             f"Coin: {symbol}\n"
+                             f"Durum: Hedefe gidemeden yükselişe geçti.\n"
+                             f"Dip Görülmüş: {en_iyi:.4f}\n"
+                             f"Güncel Çıkış: {guncel_fiyat:.4f}\n"
+                             f"👉 **Kârdan zarar etmemek için işlemi hemen kapat!**")
+                    send_telegram_message(mesaj)
+                    del aktif_islemler[symbol]
+
+    except Exception as e:
+        print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    """Tüm analiz, raporlama ve sinyal işlemlerini tek çatı altında yapar"""
-    print(f"🔍 {symbol} (Futures) taranıyor...")
+    """Yeni fırsatları tarar"""
     try:
-        # Veri çek
         bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # Göstergeleri Hesapla
         df['RSI'] = ta.rsi(df['close'], length=14)
         df['EMA_200'] = ta.ema(df['close'], length=200)
         df['VOL_SMA'] = ta.sma(df['volume'], length=20)
         
         latest = df.iloc[-1]
-        is_uptrend = latest['close'] > latest['EMA_200']
+        close_price = latest['close']
+        is_uptrend = close_price > latest['EMA_200']
         is_high_volume = latest['volume'] > latest['VOL_SMA']
-        
-        # 1. DURUM RAPORU (Her taramada atar)
-        rapor_mesaji = (f"📊 *{symbol} Futures Raporu*\n"
-                        f"----------------------------\n"
-                        f"Fiyat: {latest['close']:.4f}\n"
-                        f"RSI: {latest['RSI']:.2f}\n"
-                        f"Trend: {'🟢 YUKARI' if is_uptrend else '🔴 AŞAĞI'} (EMA 200)\n"
-                        f"Hacim: {'💪 GÜÇLÜ' if is_high_volume else '📉 DÜŞÜK'}\n"
-                        f"----------------------------")
-        send_telegram_message(rapor_mesaji)
 
-        # 2. LONG SİNYALİ (Katı Kural: Trend YUKARI olmalı!)
+        # LONG SİNYALİ
         if latest['RSI'] <= 30 and is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                mesaj = (f"🟢 **GÜVENLİ LONG SİNYALİ**\n"
+                stop_loss = close_price * (1 - STOP_LOSS_YUZDE)
+                take_profit = close_price * (1 + TAKE_PROFIT_YUZDE)
+                
+                mesaj = (f"🟢 **LONG SİNYALİ AÇILDI**\n"
                          f"----------------------------\n"
-                         f"Parite: {symbol} (Vadeli)\n"
-                         f"Giriş Fiyatı: {latest['close']:.4f}\n"
-                         f"RSI: {latest['RSI']:.2f} (Aşırı Satım)\n"
-                         f"Trend Onayı: ALINDI (EMA 200 Üstü)\n"
-                         f"Hacim: GÜÇLÜ\n"
-                         f"⚠️ *Lütfen Stop-Loss kullanın!*\n"
+                         f"Parite: {symbol}\n"
+                         f"Giriş: {close_price:.4f}\n"
+                         f"🎯 Hedef: {take_profit:.4f}\n"
+                         f"🛑 Stop: {stop_loss:.4f}\n"
+                         f"⚡ Bot bu işlemi 15 saniyede bir takip edecek!\n"
                          f"----------------------------")
                 send_telegram_message(mesaj)
                 son_sinyal_zamanlari[symbol] = latest['timestamp']
+                
+                # Bota "Bunu Takip Et" emri veriyoruz (Hafızaya ekle)
+                aktif_islemler[symbol] = {
+                    'yon': 'LONG',
+                    'giris_fiyati': close_price,
+                    'en_iyi_fiyat': close_price,
+                    'hedef': take_profit,
+                    'stop': stop_loss
+                }
         
-        # 3. SHORT SİNYALİ (Katı Kural: Trend AŞAĞI olmalı!)
+        # SHORT SİNYALİ
         elif latest['RSI'] >= 70 and not is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                mesaj = (f"🔴 **GÜVENLİ SHORT SİNYALİ**\n"
+                stop_loss = close_price * (1 + STOP_LOSS_YUZDE)
+                take_profit = close_price * (1 - TAKE_PROFIT_YUZDE)
+                
+                mesaj = (f"🔴 **SHORT SİNYALİ AÇILDI**\n"
                          f"----------------------------\n"
-                         f"Parite: {symbol} (Vadeli)\n"
-                         f"Giriş Fiyatı: {latest['close']:.4f}\n"
-                         f"RSI: {latest['RSI']:.2f} (Aşırı Alım)\n"
-                         f"Trend Onayı: ALINDI (EMA 200 Altı)\n"
-                         f"Hacim: GÜÇLÜ\n"
-                         f"⚠️ *Lütfen Stop-Loss kullanın!*\n"
+                         f"Parite: {symbol}\n"
+                         f"Giriş: {close_price:.4f}\n"
+                         f"🎯 Hedef: {take_profit:.4f}\n"
+                         f"🛑 Stop: {stop_loss:.4f}\n"
+                         f"⚡ Bot bu işlemi 15 saniyede bir takip edecek!\n"
                          f"----------------------------")
                 send_telegram_message(mesaj)
                 son_sinyal_zamanlari[symbol] = latest['timestamp']
+                
+                # Bota "Bunu Takip Et" emri veriyoruz
+                aktif_islemler[symbol] = {
+                    'yon': 'SHORT',
+                    'giris_fiyati': close_price,
+                    'en_iyi_fiyat': close_price,
+                    'hedef': take_profit,
+                    'stop': stop_loss
+                }
                 
     except Exception as e:
         print(f"Analiz hatası ({symbol}): {e}")
 
-# --- ANA DÖNGÜ ---
+# --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
     try:
-        baslangic_mesaji = f"🛡️ **FUTURES KESKİN NİŞANCI BOT BAŞLATILDI**\nİzlenen Parite Sayısı: {len(SYMBOLS)}\nRisk Modu: MİNİMUM (EMA200 Aktif)\n---------------------------------"
-        print(baslangic_mesaji)
-        send_telegram_message(baslangic_mesaji)
+        print("🤖 AKTİF TAKİPLİ BOT BAŞLATILDI")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nSinyaller 5 dakikada bir taranacak, açık işlemler 15 saniyede bir izlenecek.")
+        
+        son_genel_tarama = 0
+        TARAMA_ARALIGI = 300 # 5 Dakika
+        TAKIP_ARALIGI = 15   # 15 Saniye
         
         while True:
-            döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
-            print("--- Yeni Tarama Döngüsü Başlıyor ---")
-            send_telegram_message(döngü_baslangic)
+            su_an = time.time()
             
-            for symbol in SYMBOLS:
-                analyze_and_signal(symbol)
-                time.sleep(1) # API limitleri için
+            # 1. GÖREV: Aktif İşlemleri Saniye Saniye Koru (Eğer işlem varsa)
+            if aktif_islemler:
+                # print("🔍 Aktif işlemler kontrol ediliyor...") # Konsolu doldurmasın diye kapalı
+                for symbol in list(aktif_islemler.keys()):
+                    aktif_islemi_takip_et(symbol)
+            
+            # 2. GÖREV: Piyasada Yeni Fırsat Ara (Sadece 5 dakikada bir çalışır)
+            if su_an - son_genel_tarama >= TARAMA_ARALIGI:
+                # print("--- Yeni Genel Tarama Döngüsü Başlıyor ---")
                 
-            döngü_bitis = "✅ **LİSTE TARANDI**\nBot 5 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
-            print("Tüm liste tarandı. 300 saniye bekleniyor...")
-            send_telegram_message(döngü_bitis)
+                for symbol in SYMBOLS:
+                    # Sadece henüz işlem açmadığımız coinleri tara!
+                    if symbol not in aktif_islemler: 
+                        analyze_and_signal(symbol)
+                        time.sleep(1)
+                
+                son_genel_tarama = time.time()
             
-            time.sleep(300) # 5 dakika bekleme
+            # Döngüyü 15 saniye beklet
+            time.sleep(TAKIP_ARALIGI)
 
     except Exception as e:
-        hata_mesaji = f"🚨 **BOT ÇÖKTÜ!**\n\nHata Detayı:\n{traceback.format_exc()}"
-        send_telegram_message(hata_mesaji)
-        print(hata_mesaji)
+        hata = f"🚨 **BOT ÇÖKTÜ!**\n\nDetay:\n{traceback.format_exc()}"
+        send_telegram_message(hata)
+        print(hata)
         raise e
