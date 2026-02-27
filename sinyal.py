@@ -133,6 +133,8 @@ def aktif_islemi_takip_et(symbol):
                     del aktif_islemler[symbol]
 
     except Exception as e:
+        hata_mesaji = f"⚠️ **TAKİP HATASI ({symbol})**\nArka planda bir sorun oluştu ama bot çalışmaya devam ediyor.\nDetay: `{e}`"
+        send_telegram_message(hata_mesaji)
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
@@ -211,6 +213,8 @@ def analyze_and_signal(symbol):
                 }
                 
     except Exception as e:
+        hata_mesaji = f"⚠️ **TARAMA HATASI ({symbol})**\nBu coin taranırken bir sorun oluştu, pas geçiliyor.\nDetay: `{e}`"
+        send_telegram_message(hata_mesaji)
         print(f"Analiz hatası ({symbol}): {e}")
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
