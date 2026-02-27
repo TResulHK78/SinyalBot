@@ -8,9 +8,9 @@ import traceback
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
-SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
+SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "USDC/USDT"]
 TIMEFRAME = "15m"
-LIMIT = 250  # EMA 200 için en az 200-250 mum
+LIMIT = 1000  # EMA 200 için en az 200-250 mum
 
 # Bağlantılar
 exchange = ccxt.binance()
@@ -113,4 +113,5 @@ if __name__ == "__main__":
         send_telegram_message(hata_mesaji)
         print(hata_mesaji)
         raise e
+
 
