@@ -221,10 +221,21 @@ if __name__ == "__main__":
             
             # 2. GÖREV: Piyasada Yeni Fırsat Ara (Sadece 5 dakikada bir çalışır)
             if su_an - son_genel_tarama >= TARAMA_ARALIGI:
+                
+                # BİLGİLENDİRME: Tarama Başlıyor
+                döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
+                print("--- Yeni Tarama Döngüsü Başlıyor ---")
+                send_telegram_message(döngü_baslangic)
+                
                 for symbol in SYMBOLS:
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
                         time.sleep(1)
+                
+                # BİLGİLENDİRME: Tarama Bitti
+                döngü_bitis = "✅ **LİSTE TARANDI**\nBot 5 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
+                print("Tüm liste tarandı. 300 saniye bekleniyor...")
+                send_telegram_message(döngü_bitis)
                 
                 son_genel_tarama = time.time()
             
