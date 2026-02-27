@@ -8,9 +8,25 @@ import traceback
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
-SYMBOLS = ["SANTOS/USDT", "HOLO/USDT", "ZBT/USDT", "ASR/USDT", "YB/USDT"]
 TIMEFRAME = "15m" 
 LIMIT = 1000
+
+def get_all_usdt_futures():
+    """Binance Vadeli İşlemlerdeki aktif tüm USDT paritelerini bulur"""
+    print("🌍 Tüm piyasa coinleri taranıyor, liste güncelleniyor...")
+    try:
+        exchange.load_markets()
+        symbols = []
+        for symbol in exchange.markets:
+            market = exchange.markets[symbol]
+            # Sadece USDT çiftlerini, aktif olanları ve Vadeli (Linear) olanları seç
+            if market.get('active') and market.get('linear') and market.get('quote') == 'USDT':
+                symbols.append(symbol)
+        return symbols
+    except Exception as e:
+        mesaj = f"⚠️ Coin listesi çekilemedi!\nDetay: {e}"
+        send_telegram_message(mesaj)
+        return ["BTC/USDT:USDT", "ETH/USDT:USDT"] # Hata anında yedek güvenlik listesi
 
 # --- RİSK VE TAKİP AYARLARI ---
 STOP_LOSS_YUZDE = 0.01  # %1 Zarar Kes
@@ -220,8 +236,8 @@ def analyze_and_signal(symbol):
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
     try:
-        print("🤖 AKTİF TAKİPLİ BOT BAŞLATILDI")
-        send_telegram_message("🚀 **Sistem Başlatıldı!**\nSinyaller 5 dakikada bir taranacak, açık işlemler 15 saniyede bir izlenecek.")
+        print("🤖 TÜM PİYASA (250+ COİN) AVCI BOTU BAŞLATILDI")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nBütün Binance Futures piyasası arka planda sessizce taranacak.")
         
         son_genel_tarama = 0
         TARAMA_ARALIGI = 300 # 5 Dakika
@@ -238,19 +254,30 @@ if __name__ == "__main__":
             # 2. GÖREV: Piyasada Yeni Fırsat Ara (Sadece 5 dakikada bir çalışır)
             if su_an - son_genel_tarama >= TARAMA_ARALIGI:
                 
-                # BİLGİLENDİRME: Tarama Başlıyor
-                döngü_baslangic = "\n🔄 **YENİ TARAMA BAŞLIYOR**\n➖➖➖➖➖➖➖➖➖➖"
-                print("--- Yeni Tarama Döngüsü Başlıyor ---")
+                guncel_coin_listesi = get_all_usdt_futures()
+                toplam_coin = len(guncel_coin_listesi)
+                
+                döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
+                print(döngü_baslangic)
                 send_telegram_message(döngü_baslangic)
                 
-                for symbol in SYMBOLS:
+                tarama_sayaci = 0  # Hangi coinde olduğumuzu sayacak
+                
+                for symbol in guncel_coin_listesi:
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        time.sleep(1)
+                        time.sleep(0.5) # API Limiti Koruması
+                        
+                    tarama_sayaci += 1 # Her coinde sayacı 1 artır
+                    
+                    # HER 50 COİNDE BİR BİLGİLENDİRME AT (50, 100, 150...)
+                    if tarama_sayaci % 50 == 0:
+                        ara_mesaj = f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı. Piyasa şu an normal, fırsat aramaya devam ediliyor..."
+                        print(ara_mesaj)
+                        send_telegram_message(ara_mesaj)
                 
-                # BİLGİLENDİRME: Tarama Bitti
-                döngü_bitis = "✅ **LİSTE TARANDI**\nBot 5 dakika dinleniyor...\n➖➖➖➖➖➖➖➖➖➖"
-                print("Tüm liste tarandı. 300 saniye bekleniyor...")
+                döngü_bitis = f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot 5 dakika dinleniyor ve açık işlemleri izliyor...\n➖➖➖➖➖➖➖➖➖➖"
+                print("Tarama bitti. Dinlenmeye geçildi.")
                 send_telegram_message(döngü_bitis)
                 
                 son_genel_tarama = time.time()
