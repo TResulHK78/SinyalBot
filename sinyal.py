@@ -154,7 +154,7 @@ def aktif_islemi_takip_et(symbol):
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    """Yeni fırsatları tarar"""
+    """Yeni fırsatları arka planda SESSİZCE tarar"""
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -168,18 +168,10 @@ def analyze_and_signal(symbol):
         is_uptrend = close_price > latest['EMA_100']
         is_high_volume = latest['volume'] > latest['VOL_SMA']
 
-        # 1. DURUM RAPORU (İçimiz rahat etsin diye)
-        rapor_mesaji = (f"📊 *{symbol} Futures Raporu*\n"
-                        f"----------------------------\n"
-                        f"Fiyat: {close_price:.4f}\n"
-                        f"RSI: {latest['RSI']:.2f}\n"
-                        f"Trend: {'🟢 YUKARI' if is_uptrend else '🔴 AŞAĞI'} (EMA 100)\n"
-                        f"Hacim: {'💪 GÜÇLÜ' if is_high_volume else '📉 DÜŞÜK'}\n"
-                        f"----------------------------")
-        send_telegram_message(rapor_mesaji)
+        # --- DİKKAT: ESKİ DURUM RAPORU BURADAN TAMAMEN SİLİNDİ! ---
 
         # LONG SİNYALİ
-        if latest['RSI'] <= 35 and is_uptrend:
+        if latest['RSI'] <= 30 and is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 - STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 + TAKE_PROFIT_YUZDE)
@@ -204,7 +196,7 @@ def analyze_and_signal(symbol):
                 }
         
         # SHORT SİNYALİ
-        elif latest['RSI'] >= 65 and not is_uptrend:
+        elif latest['RSI'] >= 70 and not is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 + STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 - TAKE_PROFIT_YUZDE)
