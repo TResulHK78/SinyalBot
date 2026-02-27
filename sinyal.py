@@ -39,7 +39,7 @@ def send_telegram_message(message):
         print(f"Mesaj hatası: {e}")
 
 def aktif_islemi_takip_et(symbol):
-    """15 saniyede bir işlemde olduğumuz coini denetler"""
+    """15 saniyede bir işlemde olduğumuz coini denetler ve Telegram'a anlık rapor atar"""
     try:
         ticker = exchange.fetch_ticker(symbol)
         guncel_fiyat = ticker['last']
@@ -47,6 +47,18 @@ def aktif_islemi_takip_et(symbol):
         islem = aktif_islemler[symbol]
         yon = islem['yon']
         giris = islem['giris_fiyati']
+        
+        # --- YENİ EKLENEN: HER 15 SANİYEDE BİR CANLI RAPOR MESAJI ---
+        kar_zarar = "🟢 KÂRDA" if (yon == 'LONG' and guncel_fiyat > giris) or (yon == 'SHORT' and guncel_fiyat < giris) else "🔴 ZARARDA"
+        
+        canli_mesaj = (f"⏱️ **CANLI TAKİP: {symbol} ({yon})**\n"
+                       f"Durum: {kar_zarar}\n"
+                       f"Güncel Fiyat: {guncel_fiyat:.4f}\n"
+                       f"Giriş Fiyatı: {giris:.4f}\n"
+                       f"En İyi Görülen: {islem['en_iyi_fiyat']:.4f}\n"
+                       f"----------------------------")
+        send_telegram_message(canli_mesaj)
+        # -------------------------------------------------------------
         
         if yon == 'LONG':
             if guncel_fiyat > islem['en_iyi_fiyat']:
