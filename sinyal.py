@@ -8,7 +8,7 @@ import traceback
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
-SYMBOLS = ["RED/USDT", "C/USDT", "ZKC/USDT", "INIT/USDT", "TREE/USDT"]
+SYMBOLS = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
 TIMEFRAME = "15m" 
 LIMIT = 1000
 
@@ -161,7 +161,7 @@ def analyze_and_signal(symbol):
         send_telegram_message(rapor_mesaji)
 
         # LONG SİNYALİ
-        if latest['RSI'] <= 40:
+        if latest['RSI'] <= 35:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 - STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 + TAKE_PROFIT_YUZDE)
@@ -186,7 +186,7 @@ def analyze_and_signal(symbol):
                 }
         
         # SHORT SİNYALİ
-        elif latest['RSI'] >= 60:
+        elif latest['RSI'] >= 65:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 + STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 - TAKE_PROFIT_YUZDE)
