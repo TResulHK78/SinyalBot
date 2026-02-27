@@ -161,7 +161,7 @@ def analyze_and_signal(symbol):
         send_telegram_message(rapor_mesaji)
 
         # LONG SİNYALİ
-        if latest['RSI'] <= 35:
+        if latest['RSI'] <= 35 and is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 - STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 + TAKE_PROFIT_YUZDE)
@@ -186,7 +186,7 @@ def analyze_and_signal(symbol):
                 }
         
         # SHORT SİNYALİ
-        elif latest['RSI'] >= 65:
+        elif latest['RSI'] >= 65 and not is_uptrend and is_high_volume:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
                 stop_loss = close_price * (1 + STOP_LOSS_YUZDE)
                 take_profit = close_price * (1 - TAKE_PROFIT_YUZDE)
