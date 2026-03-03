@@ -122,37 +122,44 @@ def aktif_islemi_takip_et(symbol):
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    """Bollinger Kırılımı ve ATR Kalkanı ile Fırsat Arar"""
+    """Bollinger Kırılımı ve ATR Kalkanı ile Fırsat Arar (Bozuk Coin Korumalı)"""
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
+        
+        # 🛡️ İŞTE BOTU KÖRLÜKTEN KURTARAN HAYATİ KALKAN:
+        # Eğer coinin verisi 100 mumdan azsa (yeni coinse) hesaplama yapma, pas geç!
+        if len(bars) < 100:
+            return 
+            
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # --- YENİ HİBRİT GÖSTERGELER ---
-        df.ta.bbands(length=20, std=2, append=True) # Bollinger Bantları (BBL: Alt, BBU: Üst)
-        df['EMA_100'] = ta.ema(df['close'], length=100) # Ana Trend
-        df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14) # Oynaklık (Nefes Alma Payı)
-        df['VOL_SMA'] = ta.sma(df['volume'], length=20) # Hacim
+        bb = ta.bbands(df['close'], length=20, std=2)
+        if bb is None or bb.empty:
+            return 
+            
+        df['BBL'] = bb.iloc[:, 0] # Alt Bant
+        df['BBU'] = bb.iloc[:, 2] # Üst Bant
+        
+        df['EMA_100'] = ta.ema(df['close'], length=100)
+        df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
         
         latest = df.iloc[-1]
         
-        # Veri henüz oluşmadıysa pas geç
-        if pd.isna(latest['ATR']) or pd.isna(latest['BBU_20_2.0']):
+        # Eğer matematiksel bir boşluk (NaN) oluştuysa bot çökmesin diye pas geç
+        if pd.isna(latest['ATR']) or pd.isna(latest['BBU']) or pd.isna(latest['EMA_100']):
             return
 
         close_price = latest['close']
         atr_degeri = latest['ATR']
-        ust_bant = latest['BBU_20_2.0']
-        alt_bant = latest['BBL_20_2.0']
+        ust_bant = latest['BBU']
+        alt_bant = latest['BBL']
         
         is_uptrend = close_price > latest['EMA_100']
         is_downtrend = close_price < latest['EMA_100']
-        is_high_volume = latest['volume'] > latest['VOL_SMA']
 
-        # 🚀 MOMENTUM LONG SİNYALİ (Bollinger Üst Bandını Kırarak Patlama)
-        if close_price > ust_bant and is_uptrend and is_high_volume:
+        # 🚀 MOMENTUM LONG SİNYALİ 
+        if close_price > ust_bant and is_uptrend:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                # Dinamik Risk Yönetimi (ATR * 1.5 Stop, ATR * 3 Hedef)
                 stop_loss = close_price - (atr_degeri * 1.5)
                 take_profit = close_price + (atr_degeri * 3.0)
                 
@@ -176,11 +183,9 @@ def analyze_and_signal(symbol):
                     'atr': atr_degeri
                 }
         
-        # 🩸 ŞELALE SHORT SİNYALİ (Bollinger Alt Bandını Kırarak Çökme)
-        elif close_price < alt_bant and is_downtrend and is_high_volume:
+        # 🩸 ŞELALE SHORT SİNYALİ
+        elif close_price < alt_bant and is_downtrend:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                # Dinamik Risk Yönetimi
                 stop_loss = close_price + (atr_degeri * 1.5)
                 take_profit = close_price - (atr_degeri * 3.0)
                 
@@ -205,7 +210,8 @@ def analyze_and_signal(symbol):
                 }
                 
     except Exception as e:
-        pass # Arka planda sessizce geçsin
+        # Hata konsola düşsün ama botu kilitlemesin
+        print(f"Hata ({symbol}): {e}") 
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
