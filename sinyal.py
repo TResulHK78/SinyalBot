@@ -10,6 +10,8 @@ TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
 LIMIT = 1000
+MAX_ACIK_ISLEM = 3  # Bot aynı anda en fazla kaç coine girsin?
+
 
 # --- BİNANCE FUTURES BAĞLANTISI ---
 exchange = ccxt.binance({
@@ -122,10 +124,14 @@ def aktif_islemi_takip_et(symbol):
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    """Bollinger Kırılımı ve ATR Kalkanı ile Fırsat Arar (Bozuk Coin Korumalı)"""
+    # --- KASA KORUMASI (İŞLEM LİMİTİ) ---
+    if len(aktif_islemler) >= MAX_ACIK_ISLEM:
+        return  # Belirlenen limite ulaşıldıysa yeni coin taramadan direkt fonksiyondan çık!
+    # ------------------------------------
+
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
-        
+
         # 🛡️ İŞTE BOTU KÖRLÜKTEN KURTARAN HAYATİ KALKAN:
         # Eğer coinin verisi 100 mumdan azsa (yeni coinse) hesaplama yapma, pas geç!
         if len(bars) < 100:
