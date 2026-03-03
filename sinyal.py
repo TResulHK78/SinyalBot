@@ -9,7 +9,7 @@ import traceback
 TELEGRAM_TOKEN = "7968551890:AAFmtuxAvIEhpYVg7m8NL2TjROLQPgJxvzA"
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
-LIMIT = 1000
+LIMIT = 1001
 MAX_ACIK_ISLEM = 3  # Bot aynı anda en fazla kaç coine girsin?
 
 
