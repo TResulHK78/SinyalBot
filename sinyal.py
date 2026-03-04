@@ -6,7 +6,7 @@ import time
 import traceback
 
 # --- AYARLAR ---
-TELEGRAM_TOKEN = "7968551890:AAFfLm4uYP9-jZ46xJxWFwTMu-RFrunO1v4"
+TELEGRAM_TOKEN = "7968551890:AAErvB-0uBfy3Pfwj-F5kj-4smpUkrjqsJg"
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
 LIMIT = 1001
