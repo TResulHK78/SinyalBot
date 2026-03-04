@@ -246,10 +246,7 @@ def analyze_and_signal(symbol):
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
     keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ BURADA ÇALIŞIR
-    try:
-        # ... senin eski kodların (print("Sistem başlatıldı") vs.) buradan aşağı devam edecek
-
-    try:
+     try:
             print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
         send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
         
