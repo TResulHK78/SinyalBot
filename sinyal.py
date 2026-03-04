@@ -250,7 +250,7 @@ if __name__ == "__main__":
         # ... senin eski kodların (print("Sistem başlatıldı") vs.) buradan aşağı devam edecek
 
     try:
-        print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
+            print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
         send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
         
         son_genel_tarama = 0
