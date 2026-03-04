@@ -1,6 +1,8 @@
 ccxt
 pandas
+numba
 pandas-ta
 requests
 flask
+gunicorn
 
