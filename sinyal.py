@@ -247,7 +247,7 @@ def analyze_and_signal(symbol):
 if __name__ == "__main__":
     keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ BURADA ÇALIŞIR
      try:
-            print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
+        print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
         send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
         
         son_genel_tarama = 0
