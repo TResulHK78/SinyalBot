@@ -1,5 +1,5 @@
 flask
 ccxt
 pandas
-pandas-ta
+pandas_ta
 requests
