@@ -124,16 +124,14 @@ def aktif_islemi_takip_et(symbol):
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    # --- KASA KORUMASI (İŞLEM LİMİTİ) ---
+    """Gerçek Kırılımları ADX (Trend Gücü) ile Doğrulayan Bot"""
+    
     if len(aktif_islemler) >= MAX_ACIK_ISLEM:
-        return  # Belirlenen limite ulaşıldıysa yeni coin taramadan direkt fonksiyondan çık!
-    # ------------------------------------
-
+        return
+        
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
-
-        # 🛡️ İŞTE BOTU KÖRLÜKTEN KURTARAN HAYATİ KALKAN:
-        # Eğer coinin verisi 100 mumdan azsa (yeni coinse) hesaplama yapma, pas geç!
+        
         if len(bars) < 100:
             return 
             
@@ -143,81 +141,91 @@ def analyze_and_signal(symbol):
         if bb is None or bb.empty:
             return 
             
-        df['BBL'] = bb.iloc[:, 0] # Alt Bant
-        df['BBU'] = bb.iloc[:, 2] # Üst Bant
+        df['BBL'] = bb.iloc[:, 0] 
+        df['BBU'] = bb.iloc[:, 2] 
         
         df['EMA_100'] = ta.ema(df['close'], length=100)
         df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+        df['VOL_SMA'] = ta.sma(df['volume'], length=20) 
         
+        # 🛡️ YENİ KALKAN: ADX (Trend Gücü Dedektörü)
+        adx_df = ta.adx(df['high'], df['low'], df['close'], length=14)
+        if adx_df is not None and not adx_df.empty:
+            df['ADX'] = adx_df.iloc[:, 0] # ADX değerini alıyoruz
+        else:
+            return # ADX hesaplanamazsa pas geç
+        
+        previous = df.iloc[-2]
         latest = df.iloc[-1]
         
-        # Eğer matematiksel bir boşluk (NaN) oluştuysa bot çökmesin diye pas geç
-        if pd.isna(latest['ATR']) or pd.isna(latest['BBU']) or pd.isna(latest['EMA_100']):
+        if pd.isna(latest['ATR']) or pd.isna(latest['BBU']) or pd.isna(latest['EMA_100']) or pd.isna(latest['ADX']):
             return
 
-        close_price = latest['close']
         atr_degeri = latest['ATR']
-        ust_bant = latest['BBU']
-        alt_bant = latest['BBL']
         
-        is_uptrend = close_price > latest['EMA_100']
-        is_downtrend = close_price < latest['EMA_100']
+        is_uptrend = latest['close'] > latest['EMA_100']
+        is_downtrend = latest['close'] < latest['EMA_100']
+        is_high_volume = latest['volume'] > latest['VOL_SMA']
+        
+        # 🛡️ ADX KURALI: Trend gücü 22'nin üzerindeyse bu gerçek bir harekettir! (Testere piyasasını eler)
+        is_strong_trend = latest['ADX'] > 22 
 
-        # 🚀 MOMENTUM LONG SİNYALİ 
-        if close_price > ust_bant and is_uptrend:
+        # 🚀 GERÇEK MOMENTUM LONG
+        if previous['close'] <= previous['BBU'] and latest['close'] > latest['BBU'] and is_uptrend and is_high_volume and is_strong_trend:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                stop_loss = close_price - (atr_degeri * 1.5)
-                take_profit = close_price + (atr_degeri * 3.0)
                 
-                mesaj = (f"🚀 **BOLLINGER BREAKOUT: LONG SİNYALİ**\n"
+                stop_loss = latest['close'] - (atr_degeri * 1.5)
+                take_profit = latest['close'] + (atr_degeri * 3.0)
+                
+                mesaj = (f"🚀 **GÜÇLÜ KIRILIM: LONG SİNYALİ**\n"
                          f"----------------------------\n"
                          f"Parite: {symbol}\n"
-                         f"Giriş: {close_price:.4f}\n\n"
+                         f"Giriş: {latest['close']:.4f}\n\n"
                          f"🎯 Hedef: {take_profit:.4f}\n"
                          f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ *Kalkan:* ATR Dinamik Stop Devrede\n"
+                         f"🛡️ ADX: {latest['ADX']:.1f} (Trend Güçlü)\n"
                          f"----------------------------")
                 send_telegram_message(mesaj)
                 son_sinyal_zamanlari[symbol] = latest['timestamp']
                 
                 aktif_islemler[symbol] = {
                     'yon': 'LONG',
-                    'giris_fiyati': close_price,
-                    'en_iyi_fiyat': close_price,
+                    'giris_fiyati': latest['close'],
+                    'en_iyi_fiyat': latest['close'],
                     'hedef': take_profit,
                     'stop': stop_loss,
                     'atr': atr_degeri
                 }
         
-        # 🩸 ŞELALE SHORT SİNYALİ
-        elif close_price < alt_bant and is_downtrend:
+        # 🩸 GERÇEK ŞELALE SHORT
+        elif previous['close'] >= previous['BBL'] and latest['close'] < latest['BBL'] and is_downtrend and is_high_volume and is_strong_trend:
             if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                stop_loss = close_price + (atr_degeri * 1.5)
-                take_profit = close_price - (atr_degeri * 3.0)
                 
-                mesaj = (f"🩸 **BOLLINGER BREAKOUT: SHORT SİNYALİ**\n"
+                stop_loss = latest['close'] + (atr_degeri * 1.5)
+                take_profit = latest['close'] - (atr_degeri * 3.0)
+                
+                mesaj = (f"🩸 **GÜÇLÜ KIRILIM: SHORT SİNYALİ**\n"
                          f"----------------------------\n"
                          f"Parite: {symbol}\n"
-                         f"Giriş: {close_price:.4f}\n\n"
+                         f"Giriş: {latest['close']:.4f}\n\n"
                          f"🎯 Hedef: {take_profit:.4f}\n"
                          f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ *Kalkan:* ATR Dinamik Stop Devrede\n"
+                         f"🛡️ ADX: {latest['ADX']:.1f} (Trend Güçlü)\n"
                          f"----------------------------")
                 send_telegram_message(mesaj)
                 son_sinyal_zamanlari[symbol] = latest['timestamp']
                 
                 aktif_islemler[symbol] = {
                     'yon': 'SHORT',
-                    'giris_fiyati': close_price,
-                    'en_iyi_fiyat': close_price,
+                    'giris_fiyati': latest['close'],
+                    'en_iyi_fiyat': latest['close'],
                     'hedef': take_profit,
                     'stop': stop_loss,
                     'atr': atr_degeri
                 }
                 
     except Exception as e:
-        # Hata konsola düşsün ama botu kilitlemesin
-        print(f"Hata ({symbol}): {e}") 
+        pass 
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
