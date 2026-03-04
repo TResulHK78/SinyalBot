@@ -5,6 +5,22 @@ import requests
 import time
 import traceback
 
+from flask import Flask
+from threading import Thread
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🚀 Keskin Nişancı Botu 7/24 Aktif ve Çalışıyor!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 # --- AYARLAR ---
 TELEGRAM_TOKEN = "7968551890:AAErvB-0uBfy3Pfwj-F5kj-4smpUkrjqsJg"
 CHAT_ID = "@rhksinyal"
@@ -229,6 +245,10 @@ def analyze_and_signal(symbol):
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
+    keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ BURADA ÇALIŞIR
+    try:
+        # ... senin eski kodların (print("Sistem başlatıldı") vs.) buradan aşağı devam edecek
+
     try:
         print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
         send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
