@@ -167,8 +167,8 @@ def analyze_and_signal(symbol):
         is_downtrend = latest['close'] < latest['EMA_100']
         is_high_volume = latest['volume'] > latest['VOL_SMA']
         
-        # 🛡️ ADX KURALI: Trend gücü 22'nin üzerindeyse bu gerçek bir harekettir! (Testere piyasasını eler)
-        is_strong_trend = latest['ADX'] > 22 
+        # 🛡️ ADX KURALI: Trend gücü 25'nin üzerindeyse bu gerçek bir harekettir! (Testere piyasasını eler)
+        is_strong_trend = latest['ADX'] > 25
 
         # 🚀 GERÇEK MOMENTUM LONG
         if previous['close'] <= previous['BBU'] and latest['close'] > latest['BBU'] and is_uptrend and is_high_volume and is_strong_trend:
