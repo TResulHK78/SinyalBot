@@ -4,6 +4,7 @@ import pandas_ta as ta
 import requests
 import time
 import traceback
+import os
 
 from flask import Flask
 from threading import Thread
@@ -22,7 +23,7 @@ def keep_alive():
     t.start()
 
 # --- AYARLAR ---
-TELEGRAM_TOKEN = "7968551890:AAHteJkEUN6xKt4TJcnnhwG0Fb9dKLAMIMc"
+TOKEN = os.environ.get("GIZLI_TOKEN", "HAYALET_AVCISI")
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
 LIMIT = 1001
