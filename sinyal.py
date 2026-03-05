@@ -248,13 +248,13 @@ def analyze_and_signal(symbol):
     except Exception as e:
         pass 
 
-# --- ANA DÖNGÜ (Terminatör Modu - Turbo Hız) ---
+# --- ANA DÖNGÜ (Güvenli Terminatör Modu - Anti-Ban) ---
 if __name__ == "__main__":
     keep_alive() 
     
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
     try:
-        send_telegram_message("🚀 **Sistem Başlatıldı!**\nTurbo Terminatör Modu Aktif: Kasa dolana (3/3 işlem) kadar piyasa 0.5 saniye hızla taranacak!")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nGüvenli Terminatör Modu: Binance Anti-Spam koruması devrede. Kasa dolana kadar güvenli hızda (1.5s) taranacak.")
         print("✅ TELEGRAM BAŞARILI! Tarama başlıyor...")
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! Render Environment ayarını kontrol et! Hata: {e}")
@@ -265,12 +265,13 @@ if __name__ == "__main__":
     while True:
         try:
             import time
-            mevcut_islem_sayisi = len(aktif_islemler)
             
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
+                    # 🚨 ANTI-BAN KALKANI 1: Açık işlemleri sorgularken araya 1 saniye koy!
+                    time.sleep(1) 
                     
             mevcut_islem_sayisi = len(aktif_islemler)
         
@@ -279,17 +280,20 @@ if __name__ == "__main__":
                 guncel_coin_listesi = get_all_usdt_futures()
                 toplam_coin = len(guncel_coin_listesi)
             
-                try: send_telegram_message(f"\n🔄 **TURBO TARAMA BAŞLIYOR**\nBoş Kontenjan: {ISLEM_LIMITI - mevcut_islem_sayisi} | Hedef: Tüm Piyasa (0.5s Hız)")
+                try: send_telegram_message(f"\n🔄 **GÜVENLİ TARAMA BAŞLIYOR**\nBoş Kontenjan: {ISLEM_LIMITI - mevcut_islem_sayisi} | Hedef: Tüm Piyasa")
                 except: pass
             
                 tarama_sayaci = 0  
                 son_takip_zamani = time.time() 
                 
                 for symbol in guncel_coin_listesi:
+                    # Tarama esnasında açık işlemleri kontrol etme vakti geldiyse
                     if time.time() - son_takip_zamani >= TAKIP_ARALIGI:
                         if aktif_islemler:
                             for aktif_sym in list(aktif_islemler.keys()):
                                 aktif_islemi_takip_et(aktif_sym)
+                                # 🚨 ANTI-BAN KALKANI 2: Tarama içindeki takipte de 1 saniye bekle!
+                                time.sleep(1)
                         son_takip_zamani = time.time()
 
                     if len(aktif_islemler) >= ISLEM_LIMITI:
@@ -299,8 +303,8 @@ if __name__ == "__main__":
                         
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        # ⚡ İŞTE BURASI: Sen nasıl istersen öyle, tekrar 0.5 saniyeye çekildi!
-                        time.sleep(1) 
+                        # 🚨 ANTI-BAN KALKANI 3: Binance engellemesin diye ana tarama hızı 1.5 saniye yapıldı!
+                        time.sleep(1.5) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
@@ -312,9 +316,11 @@ if __name__ == "__main__":
                 
             else:
                 # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
+                # Pusuya yattığında Binance'e hiç soru sormaz, sadece 15 saniye dinlenir.
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
             import time
             time.sleep(10)
+
