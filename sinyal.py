@@ -27,7 +27,7 @@ def keep_alive():
     t.start()
 
 # --- AYARLAR ---
-TOKEN = os.environ.get("GIZLI_TOKEN", "HAYALET_AVCISI")
+TELEGRAM_TOKEN = os.environ.get("GIZLI_TOKEN", "HAYALET_AVCISI")
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
 LIMIT = 1001
