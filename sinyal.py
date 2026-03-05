@@ -248,56 +248,71 @@ def analyze_and_signal(symbol):
     except Exception as e:
         pass 
 
-# --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
+# --- ANA DÖNGÜ (Terminatör Modu - Turbo Hız) ---
 if __name__ == "__main__":
     keep_alive() 
     
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
     try:
-        send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
-        print("✅ TELEGRAM BAŞARILI! Mesaj atıldı, tarama başlıyor...")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nTurbo Terminatör Modu Aktif: Kasa dolana (3/3 işlem) kadar piyasa 0.5 saniye hızla taranacak!")
+        print("✅ TELEGRAM BAŞARILI! Tarama başlıyor...")
     except Exception as e:
-        print(f"❌ TELEGRAM HATASI! Render Environment (GIZLI_TOKEN) ayarını kontrol et! Hata detayı: {e}")
+        print(f"❌ TELEGRAM HATASI! Render Environment ayarını kontrol et! Hata: {e}")
     
-    son_genel_tarama = 0
-    TARAMA_ARALIGI = 300 
     TAKIP_ARALIGI = 15   
+    ISLEM_LIMITI = 3
     
     while True:
         try:
             import time
-            su_an = time.time()
+            mevcut_islem_sayisi = len(aktif_islemler)
             
+            # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
+                    
+            mevcut_islem_sayisi = len(aktif_islemler)
         
-            if su_an - son_genel_tarama >= TARAMA_ARALIGI:
+            # --- 2. AŞAMA: BOŞLUK VARSA "DURMADAN" TARAMA YAP ---
+            if mevcut_islem_sayisi < ISLEM_LIMITI:
                 guncel_coin_listesi = get_all_usdt_futures()
                 toplam_coin = len(guncel_coin_listesi)
             
-                try: send_telegram_message(f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)")
+                try: send_telegram_message(f"\n🔄 **TURBO TARAMA BAŞLIYOR**\nBoş Kontenjan: {ISLEM_LIMITI - mevcut_islem_sayisi} | Hedef: Tüm Piyasa (0.5s Hız)")
                 except: pass
             
                 tarama_sayaci = 0  
+                son_takip_zamani = time.time() 
+                
                 for symbol in guncel_coin_listesi:
+                    if time.time() - son_takip_zamani >= TAKIP_ARALIGI:
+                        if aktif_islemler:
+                            for aktif_sym in list(aktif_islemler.keys()):
+                                aktif_islemi_takip_et(aktif_sym)
+                        son_takip_zamani = time.time()
+
+                    if len(aktif_islemler) >= ISLEM_LIMITI:
+                        try: send_telegram_message("🛑 **İşlem Limiti (3/3) Doldu!**\nTarama bıçak gibi kesildi. Bot açık işlemleri pusuda izleyecek.")
+                        except: pass
+                        break 
+                        
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        time.sleep(1.5) 
+                        # ⚡ İŞTE BURASI: Sen nasıl istersen öyle, tekrar 0.5 saniyeye çekildi!
+                        time.sleep(0.5) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
                         try: send_telegram_message(f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı...")
                         except: pass
             
-                try: send_telegram_message(f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot açık işlemleri izliyor...")
-                except: pass
-                
-                son_genel_tarama = time.time()
                 import gc
                 gc.collect()
-        
-            time.sleep(TAKIP_ARALIGI)
+                
+            else:
+                # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
+                time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
