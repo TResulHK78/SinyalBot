@@ -256,8 +256,11 @@ if __name__ == "__main__":
         TAKIP_ARALIGI = 15   
         
         while True:
-            su_an = time.time()
-            
+        try:
+        # Bütün eski tarama kodlarının (if'ler, print'ler, sleep'ler) 
+        # başına 4 boşluk ekleyip buraya al!
+        
+    
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
@@ -287,4 +290,6 @@ if __name__ == "__main__":
             time.sleep(TAKIP_ARALIGI)
 
     except Exception as e:
-        send_telegram_message(f"🚨 **BOT ÇÖKTÜ!**\n\nDetay:\n{traceback.format_exc()}")
+        print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
+        time.sleep(10)
+            
