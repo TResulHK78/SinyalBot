@@ -257,7 +257,7 @@ if __name__ == "__main__":
     
     while True:
         try:
-            su_an = time.time() # Zamanlayıcının çalışması için bu şart
+            su_an = time.time()
             
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
