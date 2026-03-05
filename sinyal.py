@@ -256,24 +256,24 @@ if __name__ == "__main__":
         TAKIP_ARALIGI = 15   
         
         while True:
-        try:
+            try:
         # Bütün eski tarama kodlarının (if'ler, print'ler, sleep'ler) 
         # başına 4 boşluk ekleyip buraya al!
         
     
-            if aktif_islemler:
-                for symbol in list(aktif_islemler.keys()):
+                if aktif_islemler:
+                    for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
             
-            if su_an - son_genel_tarama >= TARAMA_ARALIGI:
+                if su_an - son_genel_tarama >= TARAMA_ARALIGI:
                 
-                guncel_coin_listesi = get_all_usdt_futures()
-                toplam_coin = len(guncel_coin_listesi)
+                    guncel_coin_listesi = get_all_usdt_futures()
+                    toplam_coin = len(guncel_coin_listesi)
                 
-                döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
-                send_telegram_message(döngü_baslangic)
+                    döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
+                    send_telegram_message(döngü_baslangic)
                 
-                tarama_sayaci = 0  
+                    tarama_sayaci = 0  
                 
                 for symbol in guncel_coin_listesi:
                     if symbol not in aktif_islemler: 
@@ -289,7 +289,7 @@ if __name__ == "__main__":
             
             time.sleep(TAKIP_ARALIGI)
 
-    except Exception as e:
-        print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
-        time.sleep(10)
+            except Exception as e:
+                print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
+                time.sleep(10)
             
