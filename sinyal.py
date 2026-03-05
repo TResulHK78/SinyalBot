@@ -247,34 +247,33 @@ def analyze_and_signal(symbol):
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
     keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ BURADA ÇALIŞIR
-    try:
-        print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
-        send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
-        
-        son_genel_tarama = 0
-        TARAMA_ARALIGI = 300 
-        TAKIP_ARALIGI = 15   
-        
-        while True:
-            try:
-        # Bütün eski tarama kodlarının (if'ler, print'ler, sleep'ler) 
-        # başına 4 boşluk ekleyip buraya al!
-        
     
-                if aktif_islemler:
-                    for symbol in list(aktif_islemler.keys()):
-                    aktif_islemi_takip_et(symbol)
+    print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
+    send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
+    
+    son_genel_tarama = 0
+    TARAMA_ARALIGI = 300 
+    TAKIP_ARALIGI = 15   
+    
+    while True:
+        try:
+            su_an = time.time() # Zamanlayıcının çalışması için bu şart
             
-                if su_an - son_genel_tarama >= TARAMA_ARALIGI:
-                
-                    guncel_coin_listesi = get_all_usdt_futures()
-                    toplam_coin = len(guncel_coin_listesi)
-                
-                    döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
-                    send_telegram_message(döngü_baslangic)
-                
-                    tarama_sayaci = 0  
-                
+            # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
+            if aktif_islemler:
+                for symbol in list(aktif_islemler.keys()):
+                    aktif_islemi_takip_et(symbol)
+        
+            # --- 2. AŞAMA: GENEL PİYASA TARAMASI (5 dakikada bir) ---
+            if su_an - son_genel_tarama >= TARAMA_ARALIGI:
+                guncel_coin_listesi = get_all_usdt_futures()
+                toplam_coin = len(guncel_coin_listesi)
+            
+                döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
+                send_telegram_message(döngü_baslangic)
+            
+                tarama_sayaci = 0  
+            
                 for symbol in guncel_coin_listesi:
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
@@ -283,13 +282,12 @@ if __name__ == "__main__":
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
                         send_telegram_message(f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı. Yeni patlamalar (breakout) aranıyor...")
-                
+            
                 send_telegram_message(f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot açık işlemleri izliyor...\n➖➖➖➖➖➖➖➖➖➖")
                 son_genel_tarama = time.time()
-            
+        
             time.sleep(TAKIP_ARALIGI)
 
-            except Exception as e:
-                print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
-                time.sleep(10)
-            
+        except Exception as e:
+            print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
+            time.sleep(10)
