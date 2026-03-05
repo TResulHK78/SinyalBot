@@ -5,6 +5,7 @@ import requests
 import time
 import traceback
 import os
+import gc
 
 from flask import Flask
 from threading import Thread
@@ -246,9 +247,9 @@ def analyze_and_signal(symbol):
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
-    keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ BURADA ÇALIŞIR
+    keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ
     
-    print("🤖 HİBRİT BOT (BREAKOUT + ATR) BAŞLATILDI")
+    print("🤖 HİBRİT BOT BAŞLATILDI")
     send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
     
     son_genel_tarama = 0
@@ -263,7 +264,7 @@ if __name__ == "__main__":
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
-
+        
             # --- 2. AŞAMA: GENEL PİYASA TARAMASI (5 dakikada bir) ---
             if su_an - son_genel_tarama >= TARAMA_ARALIGI:
                 guncel_coin_listesi = get_all_usdt_futures()
@@ -277,7 +278,8 @@ if __name__ == "__main__":
                 for symbol in guncel_coin_listesi:
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        time.sleep(0.5) 
+                        # MOTORU SOĞUTMA: Sunucu yanmasın diye 1.5 saniye nefes alır
+                        time.sleep(1.5) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
@@ -285,9 +287,13 @@ if __name__ == "__main__":
             
                 send_telegram_message(f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot açık işlemleri izliyor...\n➖➖➖➖➖➖➖➖➖➖")
                 son_genel_tarama = time.time()
+                
+                # ÇÖP KAMYONU: Tarama bitince şişen RAM'i (Hafızayı) zorla temizler!
+                gc.collect()
         
             time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
+            # ÖLÜMSÜZLÜK ZIRHI: Hata alsa bile kapanmaz, 10 saniye bekleyip devam eder.
             print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
             time.sleep(10)
