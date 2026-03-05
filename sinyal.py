@@ -22,7 +22,7 @@ def keep_alive():
     t.start()
 
 # --- AYARLAR ---
-TELEGRAM_TOKEN = "7968551890:AAErvB-0uBfy3Pfwj-F5kj-4smpUkrjqsJg"
+TELEGRAM_TOKEN = "7968551890:AAHteJkEUN6xKt4TJcnnhwG0Fb9dKLAMIMc"
 CHAT_ID = "@rhksinyal"
 TIMEFRAME = "15m"
 LIMIT = 1001
