@@ -247,10 +247,14 @@ def analyze_and_signal(symbol):
 
 # --- ANA DÖNGÜ (Zamanlayıcı Motoru) ---
 if __name__ == "__main__":
-    keep_alive() # 🛡️ RENDER'I KANDIRAN SAHTE WEB SİTESİ
+    keep_alive() 
     
-    print("🤖 HİBRİT BOT BAŞLATILDI")
-    send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
+    print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
+    try:
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nBollinger Momentum stratejisi ve Dinamik ATR Kalkanı ile tüm piyasa taranıyor.")
+        print("✅ TELEGRAM BAŞARILI! Mesaj atıldı, tarama başlıyor...")
+    except Exception as e:
+        print(f"❌ TELEGRAM HATASI! Render Environment (GIZLI_TOKEN) ayarını kontrol et! Hata detayı: {e}")
     
     son_genel_tarama = 0
     TARAMA_ARALIGI = 300 
@@ -258,42 +262,41 @@ if __name__ == "__main__":
     
     while True:
         try:
+            import time
             su_an = time.time()
             
-            # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
         
-            # --- 2. AŞAMA: GENEL PİYASA TARAMASI (5 dakikada bir) ---
             if su_an - son_genel_tarama >= TARAMA_ARALIGI:
                 guncel_coin_listesi = get_all_usdt_futures()
                 toplam_coin = len(guncel_coin_listesi)
             
-                döngü_baslangic = f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)\n➖➖➖➖➖➖➖➖➖➖"
-                send_telegram_message(döngü_baslangic)
+                try: send_telegram_message(f"\n🔄 **YENİ TARAMA BAŞLIYOR**\nHedef: Tüm Piyasa ({toplam_coin} Coin)")
+                except: pass
             
                 tarama_sayaci = 0  
-            
                 for symbol in guncel_coin_listesi:
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        # MOTORU SOĞUTMA: Sunucu yanmasın diye 1.5 saniye nefes alır
                         time.sleep(1.5) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
-                        send_telegram_message(f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı. Yeni patlamalar (breakout) aranıyor...")
+                        try: send_telegram_message(f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı...")
+                        except: pass
             
-                send_telegram_message(f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot açık işlemleri izliyor...\n➖➖➖➖➖➖➖➖➖➖")
-                son_genel_tarama = time.time()
+                try: send_telegram_message(f"✅ **TÜM PİYASA TARANDI ({toplam_coin} Coin)**\nBot açık işlemleri izliyor...")
+                except: pass
                 
-                # ÇÖP KAMYONU: Tarama bitince şişen RAM'i (Hafızayı) zorla temizler!
+                son_genel_tarama = time.time()
+                import gc
                 gc.collect()
         
             time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
-            # ÖLÜMSÜZLÜK ZIRHI: Hata alsa bile kapanmaz, 10 saniye bekleyip devam eder.
-            print(f"⚠️ Anlık hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
+            print(f"⚠️ Hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
+            import time
             time.sleep(10)
