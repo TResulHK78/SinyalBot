@@ -261,8 +261,9 @@ if __name__ == "__main__":
             
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
-                for symbol in list(aktif_islemler.keys()):
-                    aktif_islemi_takip_et(symbol)
+                for symbol in 
+                    list(aktif_islemler.keys()):
+                     aktif_islemi_takip_et(symbol)
         
             # --- 2. AŞAMA: GENEL PİYASA TARAMASI (5 dakikada bir) ---
             if su_an - son_genel_tarama >= TARAMA_ARALIGI:
