@@ -300,7 +300,7 @@ if __name__ == "__main__":
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
                         # ⚡ İŞTE BURASI: Sen nasıl istersen öyle, tekrar 0.5 saniyeye çekildi!
-                        time.sleep(0.5) 
+                        time.sleep(1) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
