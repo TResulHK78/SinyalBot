@@ -1,4 +1,4 @@
-ccxt
+ccxt==4.4.50
 pandas
 numba
 pandas-ta
