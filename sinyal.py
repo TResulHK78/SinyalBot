@@ -145,108 +145,94 @@ def aktif_islemi_takip_et(symbol):
         print(f"Takip hatası ({symbol}): {e}")
 
 def analyze_and_signal(symbol):
-    """Gerçek Kırılımları ADX (Trend Gücü) ile Doğrulayan Bot"""
-    
-    if len(aktif_islemler) >= MAX_ACIK_ISLEM:
-        return
-        
     try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
-        
-        if len(bars) < 100:
-            return 
-            
+        # 1. VERİ ÇEKME
+        bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=250)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        bb = ta.bbands(df['close'], length=20, std=2)
-        if bb is None or bb.empty:
-            return 
-            
-        df['BBL'] = bb.iloc[:, 0] 
-        df['BBU'] = bb.iloc[:, 2] 
+        # 🚨 KAPANMAMIŞ MUMU ÇÖPE AT! (Sahte sinyal tuzağı iptal)
+        df = df[:-1]
+
+        # 2. İNDİKATÖR HESAPLAMALARI
+        bbands = ta.bbands(df['close'], length=20, std=2)
+        df = pd.concat([df, bbands], axis=1)
         
-        df['EMA_100'] = ta.ema(df['close'], length=100)
-        df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-        df['VOL_SMA'] = ta.sma(df['volume'], length=20) 
+        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+        df['ema'] = ta.ema(df['close'], length=200) # Uzun vade
+        df['sma'] = ta.sma(df['close'], length=50)  # Orta vade
+        df['rsi'] = ta.rsi(df['close'], length=14)
         
-        # 🛡️ YENİ KALKAN: ADX (Trend Gücü Dedektörü)
-        adx_df = ta.adx(df['high'], df['low'], df['close'], length=14)
-        if adx_df is not None and not adx_df.empty:
-            df['ADX'] = adx_df.iloc[:, 0] # ADX değerini alıyoruz
-        else:
-            return # ADX hesaplanamazsa pas geç
-        
-        previous = df.iloc[-2]
-        latest = df.iloc[-1]
-        
-        if pd.isna(latest['ATR']) or pd.isna(latest['BBU']) or pd.isna(latest['EMA_100']) or pd.isna(latest['ADX']):
+        # 🚨 YENİ FİLTRE: HACİM ORTALAMASI (Sahte kırılımları avlamak için)
+        df['vol_sma'] = ta.sma(df['volume'], length=20)
+
+        # Güncel verileri çek
+        son_mum = df.iloc[-1]
+        bir_onceki_mum = df.iloc[-2]
+
+        kapanis = son_mum['close']
+        ust_bant = son_mum['BBU_20_2.0']
+        alt_bant = son_mum['BBL_20_2.0']
+        atr = son_mum['atr']
+        rsi = son_mum['rsi']
+        ema = son_mum['ema']
+        sma = son_mum['sma']
+        hacim = son_mum['volume']
+        ort_hacim = son_mum['vol_sma']
+
+        # Veri eksikse atla
+        if pd.isna(atr) or pd.isna(ust_bant) or pd.isna(ema) or pd.isna(ort_hacim):
             return
 
-        atr_degeri = latest['ATR']
+        # 3. KESKİN NİŞANCI SİNYAL ONAYI (Aşama Aşama Filtreler)
         
-        is_uptrend = latest['close'] > latest['EMA_100']
-        is_downtrend = latest['close'] < latest['EMA_100']
-        is_high_volume = latest['volume'] > latest['VOL_SMA']
-        
-        # 🛡️ ADX KURALI: Trend gücü 25'nin üzerindeyse bu gerçek bir harekettir! (Testere piyasasını eler)
-        is_strong_trend = latest['ADX'] > 25
+        # 🟢 LONG (ALIM) ŞARTLARI 🟢
+        # 1. Bollinger Kırılımı:
+        bollinger_long = kapanis > ust_bant and bir_onceki_mum['close'] <= bir_onceki_mum['BBU_20_2.0']
+        # 2. Trend Onayı (50 SMA, 200 EMA'nın üzerinde olacak ve fiyat da bunların üstünde olacak):
+        trend_long = sma > ema and kapanis > sma
+        # 3. Hacim Onayı (Patlama şart! Hacim, ortalamanın %50 üzerinde olmalı):
+        hacim_long = hacim > (ort_hacim * 1.5)
+        # 4. RSI Onayı (RSI 50'den büyük olup momentumu doğrulamalı, ama 75'i geçip şişmiş olmamalı):
+        rsi_long = 50 < rsi < 75
 
-        # 🚀 GERÇEK MOMENTUM LONG
-        if previous['close'] <= previous['BBU'] and latest['close'] > latest['BBU'] and is_uptrend and is_high_volume and is_strong_trend:
-            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                stop_loss = latest['close'] - (atr_degeri * 1.5)
-                take_profit = latest['close'] + (atr_degeri * 3.0)
-                
-                mesaj = (f"🚀 **GÜÇLÜ KIRILIM: LONG SİNYALİ**\n"
-                         f"----------------------------\n"
-                         f"Parite: {symbol}\n"
-                         f"Giriş: {latest['close']:.4f}\n\n"
-                         f"🎯 Hedef: {take_profit:.4f}\n"
-                         f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ ADX: {latest['ADX']:.1f} (Trend Güçlü)\n"
-                         f"----------------------------")
-                send_telegram_message(mesaj)
-                son_sinyal_zamanlari[symbol] = latest['timestamp']
-                
-                aktif_islemler[symbol] = {
-                    'yon': 'LONG',
-                    'giris_fiyati': latest['close'],
-                    'en_iyi_fiyat': latest['close'],
-                    'hedef': take_profit,
-                    'stop': stop_loss,
-                    'atr': atr_degeri
-                }
-        
-        # 🩸 GERÇEK ŞELALE SHORT
-        elif previous['close'] >= previous['BBL'] and latest['close'] < latest['BBL'] and is_downtrend and is_high_volume and is_strong_trend:
-            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                stop_loss = latest['close'] + (atr_degeri * 1.5)
-                take_profit = latest['close'] - (atr_degeri * 3.0)
-                
-                mesaj = (f"🩸 **GÜÇLÜ KIRILIM: SHORT SİNYALİ**\n"
-                         f"----------------------------\n"
-                         f"Parite: {symbol}\n"
-                         f"Giriş: {latest['close']:.4f}\n\n"
-                         f"🎯 Hedef: {take_profit:.4f}\n"
-                         f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ ADX: {latest['ADX']:.1f} (Trend Güçlü)\n"
-                         f"----------------------------")
-                send_telegram_message(mesaj)
-                son_sinyal_zamanlari[symbol] = latest['timestamp']
-                
-                aktif_islemler[symbol] = {
-                    'yon': 'SHORT',
-                    'giris_fiyati': latest['close'],
-                    'en_iyi_fiyat': latest['close'],
-                    'hedef': take_profit,
-                    'stop': stop_loss,
-                    'atr': atr_degeri
-                }
-                
+        if bollinger_long and trend_long and hacim_long and rsi_long:
+            stop_loss = kapanis - (atr * 2.0) 
+            take_profit = kapanis + (atr * 3.0) 
+            
+            aktif_islemler[symbol] = {
+                'yon': 'LONG',
+                'giris': kapanis,
+                'stop': stop_loss,
+                'hedef': take_profit,
+                'zaman': time.time()
+            }
+            
+            mesaj = f"🟢 **YENİ İŞLEM (LONG)** 🟢\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Yüksek Hacim & Trend Onaylı!"
+            send_telegram_message(mesaj)
+
+        # 🔴 SHORT (SATIŞ) ŞARTLARI 🔴
+        bollinger_short = kapanis < alt_bant and bir_onceki_mum['close'] >= bir_onceki_mum['BBL_20_2.0']
+        trend_short = sma < ema and kapanis < sma
+        hacim_short = hacim > (ort_hacim * 1.5)
+        rsi_short = 25 < rsi < 50
+
+        if bollinger_short and trend_short and hacim_short and rsi_short:
+            stop_loss = kapanis + (atr * 2.0)
+            take_profit = kapanis - (atr * 3.0)
+            
+            aktif_islemler[symbol] = {
+                'yon': 'SHORT',
+                'giris': kapanis,
+                'stop': stop_loss,
+                'hedef': take_profit,
+                'zaman': time.time()
+            }
+            
+            mesaj = f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Yüksek Hacim & Trend Onaylı!"
+            send_telegram_message(mesaj)
+
     except Exception as e:
-        pass 
+        pass
 
 # --- ANA DÖNGÜ (Güvenli Terminatör Modu - Anti-Ban) ---
 if __name__ == "__main__":
@@ -259,7 +245,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! Render Environment ayarını kontrol et! Hata: {e}")
     
-    TAKIP_ARALIGI = 15   
+    TAKIP_ARALIGI = 30   
     ISLEM_LIMITI = 3
     
     while True:
@@ -303,8 +289,8 @@ if __name__ == "__main__":
                         
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        # 🚨 ANTI-BAN KALKANI 3: Binance engellemesin diye ana tarama hızı 1.5 saniye yapıldı!
-                        time.sleep(1.5) 
+                        # 🚨 ANTI-BAN KALKANI 3: Binance engellemesin diye ana tarama hızı 1.7 saniye yapıldı!
+                        time.sleep(1.7) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
@@ -316,7 +302,7 @@ if __name__ == "__main__":
                 
             else:
                 # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
-                # Pusuya yattığında Binance'e hiç soru sormaz, sadece 15 saniye dinlenir.
+                # Pusuya yattığında Binance'e hiç soru sormaz, sadece 30 saniye dinlenir.
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
