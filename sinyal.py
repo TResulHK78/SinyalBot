@@ -244,6 +244,8 @@ def analyze_and_signal(symbol):
         
         son_update_id = 0
 
+son_update_id = 0
+
 def telegram_emri_dinle():
     global son_update_id, aktif_islemler
     import os
@@ -257,7 +259,6 @@ def telegram_emri_dinle():
     url = f"https://api.telegram.org/bot{token}/getUpdates"
     
     try:
-        # Sadece yeni mesajları okumak için offset kullanıyoruz
         params = {'offset': son_update_id + 1, 'timeout': 1}
         cevap = requests.get(url, params=params).json()
         
@@ -266,17 +267,16 @@ def telegram_emri_dinle():
                 son_update_id = mesaj["update_id"]
                 
                 if "message" in mesaj and "text" in mesaj["message"]:
-                    # Mesajı al ve büyük harfe çevir (Örn: /kapat btcusdt -> /KAPAT BTCUSDT)
                     metin = mesaj["message"]["text"].strip().upper() 
                     
                     if metin.startswith("/KAPAT"):
                         parcalar = metin.split()
                         if len(parcalar) == 2:
-                            coin = parcalar[1] # Örn: BTCUSDT
+                            coin = parcalar[1] 
                             
                             if coin in aktif_islemler:
                                 del aktif_islemler[coin] # İşlemi hafızadan SİL!
-                                try: send_telegram_message(f"🛠️ **MANUEL MÜDAHALE** 🛠️\n{coin} işlemi senin emrinle kapatıldı/silindi! Kasa rahatladı, boşluğu doldurmak için tarama başlatılıyor...")
+                                try: send_telegram_message(f"🛠️ **MANUEL MÜDAHALE** 🛠️\n{coin} işlemi senin emrinle kapatıldı! Kasa rahatladı, yeni tarama başlatılıyor...")
                                 except: pass
                             else:
                                 try: send_telegram_message(f"⚠️ Hata: Sistemde {coin} adında açık bir işlem bulunamadı.")
@@ -285,37 +285,34 @@ def telegram_emri_dinle():
                             try: send_telegram_message("⚠️ Hatalı komut! Doğru kullanım: /KAPAT BTCUSDT")
                             except: pass
     except Exception as e:
-        pass # Hata olursa bot çökmesin, sessizce geçsin
+        pass 
 
-# --- ANA DÖNGÜ (Güvenli Terminatör Modu - Anti-Ban) ---
+
+# --- ANA DÖNGÜ (Manuel Komut Özellikli) ---
 if __name__ == "__main__":
     keep_alive() 
     
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
     try:
-        send_telegram_message("🚀 **Sistem Başlatıldı!**\nGüvenli Terminatör Modu: Binance Anti-Spam koruması devrede. Kasa dolana kadar güvenli hızda (1.5s) taranacak.")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nGüvenli Terminatör Modu Aktif! Artık /KAPAT komutu ile işlemlere müdahale edebilirsiniz.")
         print("✅ TELEGRAM BAŞARILI! Tarama başlıyor...")
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! Render Environment ayarını kontrol et! Hata: {e}")
     
-    TAKIP_ARALIGI = 30   
+    TAKIP_ARALIGI = 15   
     ISLEM_LIMITI = 3
     
-     while True:
+    while True:
         try:
             import time
             
-            # 👇 İŞTE BURAYA EKLİYORUZ: Bot her döngüde önce senin bir emrin var mı diye baksın! 👇
+            # 👇 BOT ÖNCE TELEGRAM'I DİNLER 👇
             telegram_emri_dinle()
             
-            mevcut_islem_sayisi = len(aktif_islemler)
-            # ... (Kodunun geri kalanı aynı şekilde devam ediyor) ...
-
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
-                    # 🚨 ANTI-BAN KALKANI 1: Açık işlemleri sorgularken araya 1 saniye koy!
                     time.sleep(1) 
                     
             mevcut_islem_sayisi = len(aktif_islemler)
@@ -332,12 +329,11 @@ if __name__ == "__main__":
                 son_takip_zamani = time.time() 
                 
                 for symbol in guncel_coin_listesi:
-                    # Tarama esnasında açık işlemleri kontrol etme vakti geldiyse
                     if time.time() - son_takip_zamani >= TAKIP_ARALIGI:
+                        telegram_emri_dinle() # Uzun tarama sırasında da kulak misafiri olsun
                         if aktif_islemler:
                             for aktif_sym in list(aktif_islemler.keys()):
                                 aktif_islemi_takip_et(aktif_sym)
-                                # 🚨 ANTI-BAN KALKANI 2: Tarama içindeki takipte de 1 saniye bekle!
                                 time.sleep(1)
                         son_takip_zamani = time.time()
 
@@ -348,8 +344,7 @@ if __name__ == "__main__":
                         
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        # 🚨 ANTI-BAN KALKANI 3: Binance engellemesin diye ana tarama hızı 1.7 saniye yapıldı!
-                        time.sleep(1.7) 
+                        time.sleep(1.5) 
                         
                     tarama_sayaci += 1 
                     if tarama_sayaci % 50 == 0:
@@ -361,11 +356,9 @@ if __name__ == "__main__":
                 
             else:
                 # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
-                # Pusuya yattığında Binance'e hiç soru sormaz, sadece 30 saniye dinlenir.
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı, bot çökmekten kurtarıldı! Hata: {e}")
             import time
             time.sleep(10)
-
