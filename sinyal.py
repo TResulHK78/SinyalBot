@@ -241,6 +241,51 @@ def analyze_and_signal(symbol):
                 
     except Exception as e:
         pass 
+        
+        son_update_id = 0
+
+def telegram_emri_dinle():
+    global son_update_id, aktif_islemler
+    import os
+    import requests
+    
+    # Render'a kaydettiğin şifreyi alıyoruz
+    token = os.environ.get("GIZLI_TOKEN") 
+    if not token:
+        return
+        
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    
+    try:
+        # Sadece yeni mesajları okumak için offset kullanıyoruz
+        params = {'offset': son_update_id + 1, 'timeout': 1}
+        cevap = requests.get(url, params=params).json()
+        
+        if cevap.get("ok") and cevap.get("result"):
+            for mesaj in cevap["result"]:
+                son_update_id = mesaj["update_id"]
+                
+                if "message" in mesaj and "text" in mesaj["message"]:
+                    # Mesajı al ve büyük harfe çevir (Örn: /kapat btcusdt -> /KAPAT BTCUSDT)
+                    metin = mesaj["message"]["text"].strip().upper() 
+                    
+                    if metin.startswith("/KAPAT"):
+                        parcalar = metin.split()
+                        if len(parcalar) == 2:
+                            coin = parcalar[1] # Örn: BTCUSDT
+                            
+                            if coin in aktif_islemler:
+                                del aktif_islemler[coin] # İşlemi hafızadan SİL!
+                                try: send_telegram_message(f"🛠️ **MANUEL MÜDAHALE** 🛠️\n{coin} işlemi senin emrinle kapatıldı/silindi! Kasa rahatladı, boşluğu doldurmak için tarama başlatılıyor...")
+                                except: pass
+                            else:
+                                try: send_telegram_message(f"⚠️ Hata: Sistemde {coin} adında açık bir işlem bulunamadı.")
+                                except: pass
+                        else:
+                            try: send_telegram_message("⚠️ Hatalı komut! Doğru kullanım: /KAPAT BTCUSDT")
+                            except: pass
+    except Exception as e:
+        pass # Hata olursa bot çökmesin, sessizce geçsin
 
 # --- ANA DÖNGÜ (Güvenli Terminatör Modu - Anti-Ban) ---
 if __name__ == "__main__":
@@ -256,10 +301,16 @@ if __name__ == "__main__":
     TAKIP_ARALIGI = 30   
     ISLEM_LIMITI = 3
     
-    while True:
+      while True:
         try:
             import time
             
+            # 👇 İŞTE BURAYA EKLİYORUZ: Bot her döngüde önce senin bir emrin var mı diye baksın! 👇
+            telegram_emri_dinle()
+            
+            mevcut_islem_sayisi = len(aktif_islemler)
+            # ... (Kodunun geri kalanı aynı şekilde devam ediyor) ...
+
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
