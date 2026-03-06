@@ -301,7 +301,7 @@ if __name__ == "__main__":
     TAKIP_ARALIGI = 30   
     ISLEM_LIMITI = 3
     
-      while True:
+     while True:
         try:
             import time
             
