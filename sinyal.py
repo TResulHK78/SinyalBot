@@ -146,11 +146,11 @@ def aktif_islemi_takip_et(symbol):
 
 def analyze_and_signal(symbol):
     try:
-        # 1. VERİ ÇEKME
-        bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=250)
+        # 1. VERİ ÇEKME (EMA 99'a düştüğü için limit 150 yapıldı, bot artık daha hızlı!)
+        bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # 🚨 KAPANMAMIŞ MUMU ÇÖPE AT! (Sahte sinyal tuzağı iptal)
+        # 🚨 KAPANMAMIŞ MUMU ÇÖPE AT!
         df = df[:-1]
 
         # 2. İNDİKATÖR HESAPLAMALARI
@@ -158,14 +158,15 @@ def analyze_and_signal(symbol):
         df = pd.concat([df, bbands], axis=1)
         
         df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-        df['ema'] = ta.ema(df['close'], length=200) # Uzun vade
-        df['sma'] = ta.sma(df['close'], length=50)  # Orta vade
+        
+        # 🔥 EMA 99 GÜNCELLEMESİ 🔥
+        df['ema'] = ta.ema(df['close'], length=99)  # Daha çevik trend onayı!
+        df['sma'] = ta.sma(df['close'], length=50)  
         df['rsi'] = ta.rsi(df['close'], length=14)
         
-        # 🚨 YENİ FİLTRE: HACİM ORTALAMASI (Sahte kırılımları avlamak için)
+        # Hacim Ortalaması
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
-        # Güncel verileri çek
         son_mum = df.iloc[-1]
         bir_onceki_mum = df.iloc[-2]
 
@@ -179,21 +180,19 @@ def analyze_and_signal(symbol):
         hacim = son_mum['volume']
         ort_hacim = son_mum['vol_sma']
 
-        # Veri eksikse atla
         if pd.isna(atr) or pd.isna(ust_bant) or pd.isna(ema) or pd.isna(ort_hacim):
             return
 
-        # 3. KESKİN NİŞANCI SİNYAL ONAYI (Aşama Aşama Filtreler)
+        # 3. DENGELİ SİNYAL ONAYI
         
         # 🟢 LONG (ALIM) ŞARTLARI 🟢
-        # 1. Bollinger Kırılımı:
         bollinger_long = kapanis > ust_bant and bir_onceki_mum['close'] <= bir_onceki_mum['BBU_20_2.0']
-        # 2. Trend Onayı (50 SMA, 200 EMA'nın üzerinde olacak ve fiyat da bunların üstünde olacak):
-        trend_long = sma > ema and kapanis > sma
-        # 3. Hacim Onayı (Patlama şart! Hacim, ortalamanın %50 üzerinde olmalı):
-        hacim_long = hacim > (ort_hacim * 1.5)
-        # 4. RSI Onayı (RSI 50'den büyük olup momentumu doğrulamalı, ama 75'i geçip şişmiş olmamalı):
-        rsi_long = 50 < rsi < 75
+        # Trend: Fiyat 99 EMA'nın üzerinde olsun
+        trend_long = kapanis > ema 
+        # Hacim: Sadece %20'lik bir artış yeterli (1.2 çarpanı)
+        hacim_long = hacim > (ort_hacim * 1.2)
+        # RSI: Çok şişmemiş olsun (< 75)
+        rsi_long = rsi < 75
 
         if bollinger_long and trend_long and hacim_long and rsi_long:
             stop_loss = kapanis - (atr * 2.0) 
@@ -207,14 +206,15 @@ def analyze_and_signal(symbol):
                 'zaman': time.time()
             }
             
-            mesaj = f"🟢 **YENİ İŞLEM (LONG)** 🟢\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Yüksek Hacim & Trend Onaylı!"
+            mesaj = f"🟢 **YENİ İŞLEM (LONG)** 🟢\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Hacim & EMA99 Trend Onaylı!"
             send_telegram_message(mesaj)
 
         # 🔴 SHORT (SATIŞ) ŞARTLARI 🔴
         bollinger_short = kapanis < alt_bant and bir_onceki_mum['close'] >= bir_onceki_mum['BBL_20_2.0']
-        trend_short = sma < ema and kapanis < sma
-        hacim_short = hacim > (ort_hacim * 1.5)
-        rsi_short = 25 < rsi < 50
+        # Trend: Fiyat 99 EMA'nın altında olsun
+        trend_short = kapanis < ema 
+        hacim_short = hacim > (ort_hacim * 1.2)
+        rsi_short = rsi > 25
 
         if bollinger_short and trend_short and hacim_short and rsi_short:
             stop_loss = kapanis + (atr * 2.0)
@@ -228,7 +228,7 @@ def analyze_and_signal(symbol):
                 'zaman': time.time()
             }
             
-            mesaj = f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Yüksek Hacim & Trend Onaylı!"
+            mesaj = f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Hacim & EMA99 Trend Onaylı!"
             send_telegram_message(mesaj)
 
     except Exception as e:
