@@ -61,9 +61,19 @@ def get_all_usdt_futures():
         return ["BTC/USDT:USDT", "ETH/USDT:USDT"]
 
 # --- YENİ ÖZELLİK: MANUEL ÖZEL ANALİZ ---
+# --- YENİ ÖZELLİK: MANUEL ÖZEL ANALİZ ---
 def ozel_analiz_yap(symbol):
     try:
+        # 1. Önce coinin borsada (Futures) olup olmadığını kontrol et
+        if symbol not in exchange.markets:
+            hedef_kisa_isim = symbol.split("/")[0]
+            send_telegram_message(f"⚠️ Hata: {hedef_kisa_isim} coini Binance Vadeli İşlemler'de (Futures) bulunmuyor. (Sadece Spot piyasada olabilir).")
+            return
+
+        # 2. Veri çekme ve hesaplama
         bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
+        import pandas as pd
+        import pandas_ta as ta
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df = df[:-1]
 
@@ -74,13 +84,15 @@ def ozel_analiz_yap(symbol):
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
         son_mum = df.iloc[-1]
-        kapanis = son_mum['close']
-        ust_bant = son_mum['BBU_20_2.0']
-        alt_bant = son_mum['BBL_20_2.0']
-        rsi = son_mum['rsi']
-        ema = son_mum['ema']
-        hacim = son_mum['volume']
-        ort_hacim = son_mum['vol_sma']
+        
+        # Matematiksel hataları önlemek için float dönüşümü yapıldı
+        kapanis = float(son_mum['close'])
+        ust_bant = float(son_mum['BBU_20_2.0'])
+        alt_bant = float(son_mum['BBL_20_2.0'])
+        rsi = float(son_mum['rsi'])
+        ema = float(son_mum['ema'])
+        hacim = float(son_mum['volume'])
+        ort_hacim = float(son_mum['vol_sma'])
 
         trend_yonu = "🟢 YÜKSELİŞ" if kapanis > ema else "🔴 DÜŞÜŞ"
         hacim_durumu = "✅ Yeterli" if hacim > (ort_hacim * 1.2) else "❌ Yetersiz"
@@ -99,8 +111,10 @@ def ozel_analiz_yap(symbol):
 
         mesaj = f"🔎 **{symbol} ÖZEL ANALİZ RAPORU** 🔎\n\n💰 **Fiyat:** {kapanis:.4f}\n📊 **Trend (EMA99):** {trend_yonu}\n📈 **RSI:** {rsi:.1f} (İdeal: 30-70)\n🌊 **Hacim:** {hacim_durumu}\n\n🎯 **Bantlar:**\nÜst: {ust_bant:.4f} | Alt: {alt_bant:.4f}\n\n🤖 **Yorum:** {durum_yorumu}"
         send_telegram_message(mesaj)
+        
     except Exception as e:
-        send_telegram_message(f"⚠️ {symbol} için veri çekilemedi. Hata: Coini borsada bulamadım.")
+        # 🚨 BÜTÜN HATALARI GİZLEMEK YERİNE GERÇEK HATAYI YAZDIRIYORUZ!
+        send_telegram_message(f"⚠️ {symbol} için analiz sırasında bir sorun oluştu.\n**Gizli Hata:** `{e}`")
 
 # --- İŞLEM TAKİP FONKSİYONU ---
 def aktif_islemi_takip_et(symbol):
