@@ -124,6 +124,15 @@ def aktif_islemi_takip_et(symbol):
         giris = islem['giris'] 
         atr = islem['atr'] 
         
+        # 🚨 SİLDİĞİMİZ CANLI BİLGİ EKRANINI GERİ EKLEDİK!
+        kar_zarar = "🟢 KÂRDA" if (yon == 'LONG' and guncel_fiyat > giris) or (yon == 'SHORT' and guncel_fiyat < giris) else "🔴 ZARARDA"
+        canli_mesaj = (f"⏱️ **CANLI TAKİP: {symbol} ({yon})**\n"
+                       f"Durum: {kar_zarar}\n"
+                       f"Güncel: {guncel_fiyat:.4f} | Giriş: {giris:.4f}\n"
+                       f"En İyi: {islem['en_iyi_fiyat']:.4f}\n"
+                       f"----------------------------")
+        send_telegram_message(canli_mesaj)
+        
         kar_koruma_hedefi = 1.0 * atr  
         kar_koruma_esnekligi = 0.5 * atr 
         
@@ -160,7 +169,7 @@ def aktif_islemi_takip_et(symbol):
                     del aktif_islemler[symbol]
 
     except Exception as e:
-        pass # Anlık API hatasında çökmesin
+        pass 
 
 # --- TARAMA VE SİNYAL FONKSİYONU ---
 def analyze_and_signal(symbol):
@@ -299,20 +308,28 @@ if __name__ == "__main__":
     
     while True:
         try:
+            import time
             telegram_emri_dinle()
             
+            # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
                     time.sleep(1) 
                     
+            # --- 2. AŞAMA: BOŞLUK VARSA "DURMADAN" TARAMA YAP ---
             if len(aktif_islemler) < MAX_ACIK_ISLEM:
                 guncel_coin_listesi = get_all_usdt_futures()
+                toplam_coin = len(guncel_coin_listesi) # 🚨 Toplam coin sayısını hafızaya aldık
+                
                 try: send_telegram_message(f"\n🔄 **TARAMA BAŞLIYOR** | Boş Yer: {MAX_ACIK_ISLEM - len(aktif_islemler)}")
                 except: pass
             
                 son_takip = time.time() 
+                tarama_sayaci = 0 # 🚨 Sayacımızı sıfırdan başlattık
+                
                 for symbol in guncel_coin_listesi:
+                    # Uzun tarama sırasında işlemleri unutmamak için periyodik kontrol
                     if time.time() - son_takip >= TAKIP_ARALIGI:
                         telegram_emri_dinle() 
                         if aktif_islemler:
@@ -321,17 +338,28 @@ if __name__ == "__main__":
                                 time.sleep(1)
                         son_takip = time.time()
 
+                    # İşlem limiti dolduysa taramayı anında kes
                     if len(aktif_islemler) >= MAX_ACIK_ISLEM:
                         break 
                         
+                    # Coini analiz et
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
                         time.sleep(1.5) 
+                        
+                    # 🚨 50'DE BİR ARA RAPOR VEREN KISIM!
+                    tarama_sayaci += 1 
+                    if tarama_sayaci % 50 == 0:
+                        try: send_telegram_message(f"⏳ **ARA RAPOR:** {tarama_sayaci} / {toplam_coin} coin tarandı...")
+                        except: pass
             
+                import gc
                 gc.collect()
             else:
+                # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı! Hata: {e}")
+            import time
             time.sleep(10)
