@@ -61,20 +61,16 @@ def get_all_usdt_futures():
         return ["BTC/USDT:USDT", "ETH/USDT:USDT"]
 
 # --- YENİ ÖZELLİK: MANUEL ÖZEL ANALİZ ---
-# --- YENİ ÖZELLİK: MANUEL ÖZEL ANALİZ ---
 def ozel_analiz_yap(symbol):
+    import pandas as pd
+    import pandas_ta as ta
     try:
-        # 1. Önce coinin borsada (Futures) olup olmadığını kontrol et
-        if symbol not in exchange.markets:
-            hedef_kisa_isim = symbol.split("/")[0]
-            send_telegram_message(f"⚠️ Hata: {hedef_kisa_isim} coini Binance Vadeli İşlemler'de (Futures) bulunmuyor. (Sadece Spot piyasada olabilir).")
-            return
-
-        # 2. Veri çekme ve hesaplama
         bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
-        import pandas as pd
-        import pandas_ta as ta
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        
+        # 🚨 Verileri zorunlu olarak sayıya (float) çevir (Garanti Kalkanı)
+        for c in ['open', 'high', 'low', 'close', 'volume']:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
         df = df[:-1]
 
         bbands = ta.bbands(df['close'], length=20, std=2)
@@ -83,12 +79,15 @@ def ozel_analiz_yap(symbol):
         df['rsi'] = ta.rsi(df['close'], length=14)
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
+        # 🚨 DİNAMİK SÜTUN BULUCU (İsim değişse de asla çökmez!)
+        bbu_sutun = [c for c in df.columns if 'BBU' in c][0]
+        bbl_sutun = [c for c in df.columns if 'BBL' in c][0]
+
         son_mum = df.iloc[-1]
         
-        # Matematiksel hataları önlemek için float dönüşümü yapıldı
         kapanis = float(son_mum['close'])
-        ust_bant = float(son_mum['BBU_20_2.0'])
-        alt_bant = float(son_mum['BBL_20_2.0'])
+        ust_bant = float(son_mum[bbu_sutun])
+        alt_bant = float(son_mum[bbl_sutun])
         rsi = float(son_mum['rsi'])
         ema = float(son_mum['ema'])
         hacim = float(son_mum['volume'])
@@ -111,10 +110,8 @@ def ozel_analiz_yap(symbol):
 
         mesaj = f"🔎 **{symbol} ÖZEL ANALİZ RAPORU** 🔎\n\n💰 **Fiyat:** {kapanis:.4f}\n📊 **Trend (EMA99):** {trend_yonu}\n📈 **RSI:** {rsi:.1f} (İdeal: 30-70)\n🌊 **Hacim:** {hacim_durumu}\n\n🎯 **Bantlar:**\nÜst: {ust_bant:.4f} | Alt: {alt_bant:.4f}\n\n🤖 **Yorum:** {durum_yorumu}"
         send_telegram_message(mesaj)
-        
     except Exception as e:
-        # 🚨 BÜTÜN HATALARI GİZLEMEK YERİNE GERÇEK HATAYI YAZDIRIYORUZ!
-        send_telegram_message(f"⚠️ {symbol} için analiz sırasında bir sorun oluştu.\n**Gizli Hata:** `{e}`")
+        send_telegram_message(f"⚠️ {symbol} için veri çekilemedi. Hata: `{e}`")
 
 # --- İŞLEM TAKİP FONKSİYONU ---
 def aktif_islemi_takip_et(symbol):
@@ -167,9 +164,15 @@ def aktif_islemi_takip_et(symbol):
 
 # --- TARAMA VE SİNYAL FONKSİYONU ---
 def analyze_and_signal(symbol):
+    import pandas as pd
+    import pandas_ta as ta
+    import time
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        
+        for c in ['open', 'high', 'low', 'close', 'volume']:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
         df = df[:-1]
 
         bbands = ta.bbands(df['close'], length=20, std=2)
@@ -181,22 +184,26 @@ def analyze_and_signal(symbol):
         df['rsi'] = ta.rsi(df['close'], length=14)
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
+        # 🚨 DİNAMİK SÜTUN BULUCU BURAYA DA EKLENDİ
+        bbu_sutun = [c for c in df.columns if 'BBU' in c][0]
+        bbl_sutun = [c for c in df.columns if 'BBL' in c][0]
+
         son_mum = df.iloc[-1]
         bir_onceki_mum = df.iloc[-2]
 
-        kapanis = son_mum['close']
-        ust_bant = son_mum['BBU_20_2.0']
-        alt_bant = son_mum['BBL_20_2.0']
-        atr = son_mum['atr']
-        rsi = son_mum['rsi']
-        ema = son_mum['ema']
-        hacim = son_mum['volume']
-        ort_hacim = son_mum['vol_sma']
+        kapanis = float(son_mum['close'])
+        ust_bant = float(son_mum[bbu_sutun])
+        alt_bant = float(son_mum[bbl_sutun])
+        atr = float(son_mum['atr'])
+        rsi = float(son_mum['rsi'])
+        ema = float(son_mum['ema'])
+        hacim = float(son_mum['volume'])
+        ort_hacim = float(son_mum['vol_sma'])
 
         if pd.isna(atr) or pd.isna(ust_bant) or pd.isna(ema) or pd.isna(ort_hacim):
             return
 
-        bollinger_long = kapanis > ust_bant and bir_onceki_mum['close'] <= bir_onceki_mum['BBU_20_2.0']
+        bollinger_long = kapanis > ust_bant and float(bir_onceki_mum['close']) <= float(bir_onceki_mum[bbu_sutun])
         trend_long = kapanis > ema 
         hacim_long = hacim > (ort_hacim * 1.2)
         rsi_long = rsi < 75
@@ -216,7 +223,7 @@ def analyze_and_signal(symbol):
             }
             send_telegram_message(f"🟢 **YENİ İŞLEM (LONG)** 🟢\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}\n📊 RSI: {rsi:.1f}")
 
-        bollinger_short = kapanis < alt_bant and bir_onceki_mum['close'] >= bir_onceki_mum['BBL_20_2.0']
+        bollinger_short = kapanis < alt_bant and float(bir_onceki_mum['close']) >= float(bir_onceki_mum[bbl_sutun])
         trend_short = kapanis < ema 
         hacim_short = hacim > (ort_hacim * 1.2)
         rsi_short = rsi > 25
