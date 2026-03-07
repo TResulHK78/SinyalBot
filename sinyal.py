@@ -147,102 +147,94 @@ def aktif_islemi_takip_et(symbol):
 MAX_ACIK_ISLEM = 3  # Bot aynı anda en fazla kaç coine girsin? (Kasa Koruması)
 
 def analyze_and_signal(symbol):
-    """Gerçek Kırılımları Bulan, Kasa Korumalı Keskin Nişancı"""
-    
-    # 🛡️ KOTA KONTROLÜ: Eğer 3 işlem açıksa, yenilerine bakma!
-    if len(aktif_islemler) >= MAX_ACIK_ISLEM:
-        return
-        
     try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=TIMEFRAME, limit=LIMIT)
-        
-        if len(bars) < 100:
-            return 
-            
+        # 1. VERİ ÇEKME (EMA 99'a düştüğü için limit 150 yapıldı, bot artık daha hızlı!)
+        bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        bb = ta.bbands(df['close'], length=20, std=2)
-        if bb is None or bb.empty:
-            return 
-            
-        df['BBL'] = bb.iloc[:, 0] # Alt Bant
-        df['BBU'] = bb.iloc[:, 2] # Üst Bant
+        # 🚨 KAPANMAMIŞ MUMU ÇÖPE AT!
+        df = df[:-1]
+
+        # 2. İNDİKATÖR HESAPLAMALARI
+        bbands = ta.bbands(df['close'], length=20, std=2)
+        df = pd.concat([df, bbands], axis=1)
         
-        df['EMA_100'] = ta.ema(df['close'], length=100)
-        df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-        df['VOL_SMA'] = ta.sma(df['volume'], length=20) # Hacim filtresi GERİ GELDİ!
+        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
         
-        # Sadece son muma değil, bir önceki muma da bakacağız (Gerçek kırılım için)
-        previous = df.iloc[-2]
-        latest = df.iloc[-1]
+        # 🔥 EMA 99 GÜNCELLEMESİ 🔥
+        df['ema'] = ta.ema(df['close'], length=99)  # Daha çevik trend onayı!
+        df['sma'] = ta.sma(df['close'], length=50)  
+        df['rsi'] = ta.rsi(df['close'], length=14)
         
-        if pd.isna(latest['ATR']) or pd.isna(latest['BBU']) or pd.isna(latest['EMA_100']):
+        # Hacim Ortalaması
+        df['vol_sma'] = ta.sma(df['volume'], length=20)
+
+        son_mum = df.iloc[-1]
+        bir_onceki_mum = df.iloc[-2]
+
+        kapanis = son_mum['close']
+        ust_bant = son_mum['BBU_20_2.0']
+        alt_bant = son_mum['BBL_20_2.0']
+        atr = son_mum['atr']
+        rsi = son_mum['rsi']
+        ema = son_mum['ema']
+        sma = son_mum['sma']
+        hacim = son_mum['volume']
+        ort_hacim = son_mum['vol_sma']
+
+        if pd.isna(atr) or pd.isna(ust_bant) or pd.isna(ema) or pd.isna(ort_hacim):
             return
 
-        atr_degeri = latest['ATR']
+        # 3. DENGELİ SİNYAL ONAYI
         
-        is_uptrend = latest['close'] > latest['EMA_100']
-        is_downtrend = latest['close'] < latest['EMA_100']
-        is_high_volume = latest['volume'] > latest['VOL_SMA']
+        # 🟢 LONG (ALIM) ŞARTLARI 🟢
+        bollinger_long = kapanis > ust_bant and bir_onceki_mum['close'] <= bir_onceki_mum['BBU_20_2.0']
+        # Trend: Fiyat 99 EMA'nın üzerinde olsun
+        trend_long = kapanis > ema 
+        # Hacim: Sadece %20'lik bir artış yeterli (1.2 çarpanı)
+        hacim_long = hacim > (ort_hacim * 1.2)
+        # RSI: Çok şişmemiş olsun (< 75)
+        rsi_long = rsi < 75
 
-        # 🚀 GERÇEK MOMENTUM LONG: Önceki mum bandın altındaydı, ŞİMDİKİ kırdı! VE Hacim yüksek.
-        if previous['close'] <= previous['BBU'] and latest['close'] > latest['BBU'] and is_uptrend and is_high_volume:
-            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                stop_loss = latest['close'] - (atr_degeri * 1.5)
-                take_profit = latest['close'] + (atr_degeri * 3.0)
-                
-                mesaj = (f"🚀 **GERÇEK KIRILIM: LONG SİNYALİ**\n"
-                         f"----------------------------\n"
-                         f"Parite: {symbol}\n"
-                         f"Giriş: {latest['close']:.4f}\n\n"
-                         f"🎯 Hedef: {take_profit:.4f}\n"
-                         f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ Hacim Onaylı | ATR Dinamik Stop\n"
-                         f"----------------------------")
-                send_telegram_message(mesaj)
-                son_sinyal_zamanlari[symbol] = latest['timestamp']
-                
-                aktif_islemler[symbol] = {
-                    'yon': 'LONG',
-                    'giris_fiyati': latest['close'],
-                    'en_iyi_fiyat': latest['close'],
-                    'hedef': take_profit,
-                    'stop': stop_loss,
-                    'atr': atr_degeri
-                }
-        
-        # 🩸 GERÇEK ŞELALE SHORT: Önceki mum bandın üstündeydi, ŞİMDİKİ aşağı kırdı! VE Hacim yüksek.
-        elif previous['close'] >= previous['BBL'] and latest['close'] < latest['BBL'] and is_downtrend and is_high_volume:
-            if son_sinyal_zamanlari.get(symbol) != latest['timestamp']:
-                
-                stop_loss = latest['close'] + (atr_degeri * 1.5)
-                take_profit = latest['close'] - (atr_degeri * 3.0)
-                
-                mesaj = (f"🩸 **GERÇEK KIRILIM: SHORT SİNYALİ**\n"
-                         f"----------------------------\n"
-                         f"Parite: {symbol}\n"
-                         f"Giriş: {latest['close']:.4f}\n\n"
-                         f"🎯 Hedef: {take_profit:.4f}\n"
-                         f"🛑 Stop: {stop_loss:.4f}\n\n"
-                         f"🛡️ Hacim Onaylı | ATR Dinamik Stop\n"
-                         f"----------------------------")
-                send_telegram_message(mesaj)
-                son_sinyal_zamanlari[symbol] = latest['timestamp']
-                
-                aktif_islemler[symbol] = {
-                    'yon': 'SHORT',
-                    'giris_fiyati': latest['close'],
-                    'en_iyi_fiyat': latest['close'],
-                    'hedef': take_profit,
-                    'stop': stop_loss,
-                    'atr': atr_degeri
-                }
-                
+        if bollinger_long and trend_long and hacim_long and rsi_long:
+            stop_loss = kapanis - (atr * 2.0) 
+            take_profit = kapanis + (atr * 3.0) 
+            
+            aktif_islemler[symbol] = {
+                'yon': 'LONG',
+                'giris': kapanis,
+                'stop': stop_loss,
+                'hedef': take_profit,
+                'zaman': time.time()
+            }
+            
+            mesaj = f"🟢 **YENİ İŞLEM (LONG)** 🟢\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Hacim & EMA99 Trend Onaylı!"
+            send_telegram_message(mesaj)
+
+        # 🔴 SHORT (SATIŞ) ŞARTLARI 🔴
+        bollinger_short = kapanis < alt_bant and bir_onceki_mum['close'] >= bir_onceki_mum['BBL_20_2.0']
+        # Trend: Fiyat 99 EMA'nın altında olsun
+        trend_short = kapanis < ema 
+        hacim_short = hacim > (ort_hacim * 1.2)
+        rsi_short = rsi > 25
+
+        if bollinger_short and trend_short and hacim_short and rsi_short:
+            stop_loss = kapanis + (atr * 2.0)
+            take_profit = kapanis - (atr * 3.0)
+            
+            aktif_islemler[symbol] = {
+                'yon': 'SHORT',
+                'giris': kapanis,
+                'stop': stop_loss,
+                'hedef': take_profit,
+                'zaman': time.time()
+            }
+            
+            mesaj = f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop Loss: {stop_loss:.4f}\n🎯 Hedef (TP): {take_profit:.4f}\n📊 RSI: {rsi:.1f}\n🚀 Durum: Hacim & EMA99 Trend Onaylı!"
+            send_telegram_message(mesaj)
+
     except Exception as e:
-        pass 
-        
-        son_update_id = 0
+        pass
 
 son_update_id = 0
 
