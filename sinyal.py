@@ -40,12 +40,13 @@ son_update_id = 0
 
 # --- YARDIMCI FONKSİYONLAR ---
 def send_telegram_message(message):
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "HAYALET_AVCISI": return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload)
     except Exception as e:
-        print(f"Mesaj hatası: {e}")
+        pass
 
 def get_all_usdt_futures():
     try:
@@ -57,18 +58,26 @@ def get_all_usdt_futures():
                 symbols.append(symbol)
         return symbols
     except Exception as e:
-        send_telegram_message(f"⚠️ Coin listesi çekilemedi! Detay: {e}")
-        return ["BTC/USDT:USDT", "ETH/USDT:USDT"]
+        hata_metni = str(e)
+        if "418" in hata_metni or "banned" in hata_metni.lower():
+            send_telegram_message("🛑 **BİNANCE IP BANI DEVREDE!**\nBinance çok fazla istekten dolayı IP'yi engelledi. Spam döngüsüne girmemek için bot **15 Dakika** uykuya alınıyor...")
+            time.sleep(900) 
+        else:
+            send_telegram_message(f"⚠️ Coin listesi çekilemedi, 1 dakika bekleniyor...\nDetay: {e}")
+            time.sleep(60)
+        return [] # Hata varsa boş liste döndür ki bot fren yapsın
 
-# --- YENİ ÖZELLİK: MANUEL ÖZEL ANALİZ ---
+# --- MANUEL ÖZEL ANALİZ ---
 def ozel_analiz_yap(symbol):
-    import pandas as pd
-    import pandas_ta as ta
     try:
+        if symbol not in exchange.markets:
+            kisa_ad = symbol.split("/")[0]
+            send_telegram_message(f"⚠️ Hata: {kisa_ad} coini Binance Vadeli İşlemler'de (Futures) bulunmuyor.")
+            return
+
         bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        # 🚨 Verileri zorunlu olarak sayıya (float) çevir (Garanti Kalkanı)
         for c in ['open', 'high', 'low', 'close', 'volume']:
             df[c] = pd.to_numeric(df[c], errors='coerce')
         df = df[:-1]
@@ -79,7 +88,6 @@ def ozel_analiz_yap(symbol):
         df['rsi'] = ta.rsi(df['close'], length=14)
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
-        # 🚨 DİNAMİK SÜTUN BULUCU (İsim değişse de asla çökmez!)
         bbu_sutun = [c for c in df.columns if 'BBU' in c][0]
         bbl_sutun = [c for c in df.columns if 'BBL' in c][0]
 
@@ -110,8 +118,9 @@ def ozel_analiz_yap(symbol):
 
         mesaj = f"🔎 **{symbol} ÖZEL ANALİZ RAPORU** 🔎\n\n💰 **Fiyat:** {kapanis:.4f}\n📊 **Trend (EMA99):** {trend_yonu}\n📈 **RSI:** {rsi:.1f} (İdeal: 30-70)\n🌊 **Hacim:** {hacim_durumu}\n\n🎯 **Bantlar:**\nÜst: {ust_bant:.4f} | Alt: {alt_bant:.4f}\n\n🤖 **Yorum:** {durum_yorumu}"
         send_telegram_message(mesaj)
+        
     except Exception as e:
-        send_telegram_message(f"⚠️ {symbol} için veri çekilemedi. Hata: `{e}`")
+        send_telegram_message(f"⚠️ {symbol} için analiz sırasında bir sorun oluştu.\n**Gizli Hata:** `{e}`")
 
 # --- İŞLEM TAKİP FONKSİYONU (SESSİZ MOD) ---
 def aktif_islemi_takip_et(symbol):
@@ -164,9 +173,6 @@ def aktif_islemi_takip_et(symbol):
 
 # --- TARAMA VE SİNYAL FONKSİYONU ---
 def analyze_and_signal(symbol):
-    import pandas as pd
-    import pandas_ta as ta
-    import time
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
         df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -184,7 +190,6 @@ def analyze_and_signal(symbol):
         df['rsi'] = ta.rsi(df['close'], length=14)
         df['vol_sma'] = ta.sma(df['volume'], length=20)
 
-        # 🚨 DİNAMİK SÜTUN BULUCU BURAYA DA EKLENDİ
         bbu_sutun = [c for c in df.columns if 'BBU' in c][0]
         bbl_sutun = [c for c in df.columns if 'BBL' in c][0]
 
@@ -221,7 +226,7 @@ def analyze_and_signal(symbol):
                 'atr': atr,
                 'zaman': time.time()
             }
-            send_telegram_message(f"🟢 **YENİ İŞLEM (LONG)** 🟢\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}\n📊 RSI: {rsi:.1f}")
+            send_telegram_message(f"🟢 **YENİ İŞLEM (LONG)** 🟢\n📌 Coin: {symbol}\n💰 Giriş: {kapanis:.4f}\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}\n📊 RSI: {rsi:.1f}")
 
         bollinger_short = kapanis < alt_bant and float(bir_onceki_mum['close']) >= float(bir_onceki_mum[bbl_sutun])
         trend_short = kapanis < ema 
@@ -241,15 +246,15 @@ def analyze_and_signal(symbol):
                 'atr': atr,
                 'zaman': time.time()
             }
-            send_telegram_message(f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n📌 Coin: {symbol}\n💰 Giriş: {kapanis}\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}\n📊 RSI: {rsi:.1f}")
+            send_telegram_message(f"🔴 **YENİ İŞLEM (SHORT)** 🔴\n📌 Coin: {symbol}\n💰 Giriş: {kapanis:.4f}\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}\n📊 RSI: {rsi:.1f}")
 
     except Exception as e:
         pass
 
-# --- TELEGRAM KULAKLIĞI (KOMUT DİNLEYİCİ) ---
+# --- TELEGRAM KULAKLIĞI ---
 def telegram_emri_dinle():
     global son_update_id, aktif_islemler
-    if not TELEGRAM_TOKEN: return
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == "HAYALET_AVCISI": return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
     
     try:
@@ -274,7 +279,8 @@ def telegram_emri_dinle():
                             del aktif_islemler[silinecek_key]
                             send_telegram_message(f"🛠️ **MANUEL MÜDAHALE** 🛠️\n{silinecek_key} kapatıldı! Kasa rahatladı.")
                         else:
-                            send_telegram_message(f"⚠️ Hata: Sistemde '{parcalar[1]}' adında bir işlem yok.")
+                            mevcut_liste = ", ".join(aktif_islemler.keys()) if aktif_islemler else "Açık işlem yok."
+                            send_telegram_message(f"⚠️ Hata: Sistemde '{parcalar[1]}' adında bir işlem yok.\n📌 Açıklar: {mevcut_liste}")
                             
                 elif metin.startswith("/ANALIZ") or metin.startswith("/BAK"):
                     parcalar = metin.split()
@@ -286,12 +292,12 @@ def telegram_emri_dinle():
     except Exception as e:
         pass 
 
-# --- ANA DÖNGÜ (SESSİZ MOD) ---
+# --- ANA DÖNGÜ (HAYALET MODU) ---
 if __name__ == "__main__":
     keep_alive() 
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
     try:
-        send_telegram_message("🚀 **Sistem Başlatıldı! (Sessiz Mod)**\nGüvenli Terminatör Modu Aktif!\n`/kapat COIN` ile işlem silebilir, `/analiz COIN` ile piyasa özeti alabilirsiniz.")
+        send_telegram_message("🚀 **Sistem Başlatıldı! (Sessiz Hayalet Modu)**\nAnti-Ban kalkanı devrede.\n`/kapat COIN` ile işlem silebilir, `/analiz COIN` ile piyasa özeti alabilirsiniz.")
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! {e}")
     
@@ -299,18 +305,21 @@ if __name__ == "__main__":
     
     while True:
         try:
-            import time
             telegram_emri_dinle()
             
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
-                    time.sleep(1) 
+                    time.sleep(2) # 🚨 ANTİ-BAN: Takipler arası 2 saniye nefes
                     
-            # --- 2. AŞAMA: BOŞLUK VARSA "DURMADAN" TARAMA YAP ---
+            # --- 2. AŞAMA: BOŞLUK VARSA TARAMA YAP ---
             if len(aktif_islemler) < MAX_ACIK_ISLEM:
                 guncel_coin_listesi = get_all_usdt_futures()
+                
+                # 🚨 FREN: Eğer liste boş döndüyse (IP ban) başa dön ve uykuya geç
+                if not guncel_coin_listesi:
+                    continue
                 
                 try: send_telegram_message(f"\n🔄 **TARAMA BAŞLIYOR** | Boş Yer: {MAX_ACIK_ISLEM - len(aktif_islemler)}")
                 except: pass
@@ -318,32 +327,26 @@ if __name__ == "__main__":
                 son_takip = time.time() 
                 
                 for symbol in guncel_coin_listesi:
-                    # Uzun tarama sırasında işlemleri unutmamak için periyodik kontrol
                     if time.time() - son_takip >= TAKIP_ARALIGI:
                         telegram_emri_dinle() 
                         if aktif_islemler:
                             for aktif_sym in list(aktif_islemler.keys()):
                                 aktif_islemi_takip_et(aktif_sym)
-                                time.sleep(1)
+                                time.sleep(2)
                         son_takip = time.time()
 
-                    # İşlem limiti dolduysa taramayı anında kes
                     if len(aktif_islemler) >= MAX_ACIK_ISLEM:
                         break 
                         
-                    # Coini analiz et
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        time.sleep(1.5) 
+                        time.sleep(3) # 🚨 ANTİ-BAN: Tarama hızı düşürüldü (3 saniye)
             
-                import gc
                 gc.collect()
             else:
-                # --- 3. AŞAMA: LİMİT DOLUYSA SADECE PUSUDA BEKLE ---
+                # --- 3. AŞAMA: LİMİT DOLUYSA BEKLE ---
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı! Hata: {e}")
-            import time
             time.sleep(10)
-
