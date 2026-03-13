@@ -292,7 +292,7 @@ def telegram_emri_dinle():
     except Exception as e:
         pass 
 
-# --- ANA DÖNGÜ (HAYALET MODU) ---
+# --- ANA DÖNGÜ (HAYALET MODU + TUR SAYACI) ---
 if __name__ == "__main__":
     keep_alive() 
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
@@ -302,9 +302,11 @@ if __name__ == "__main__":
         print(f"❌ TELEGRAM HATASI! {e}")
     
     TAKIP_ARALIGI = 15   
+    tur_sayaci = 1 # 🚨 YENİ: Tur sayacını 1'den başlatıyoruz!
     
     while True:
         try:
+            import time
             telegram_emri_dinle()
             
             # --- 1. AŞAMA: AÇIK İŞLEMLERİ TAKİP ET ---
@@ -321,7 +323,10 @@ if __name__ == "__main__":
                 if not guncel_coin_listesi:
                     continue
                 
-                try: send_telegram_message(f"\n🔄 **TARAMA BAŞLIYOR** | Boş Yer: {MAX_ACIK_ISLEM - len(aktif_islemler)}")
+                # 🚨 YENİ: Mesaja tur sayacını ekledik ve her mesajdan sonra sayıyı 1 artırdık
+                try: 
+                    send_telegram_message(f"\n🔄 **{tur_sayaci}. PİYASA TURU BAŞLIYOR**\nHedef: {len(guncel_coin_listesi)} Coin | Boş Yer: {MAX_ACIK_ISLEM - len(aktif_islemler)}")
+                    tur_sayaci += 1
                 except: pass
             
                 son_takip = time.time() 
@@ -342,6 +347,7 @@ if __name__ == "__main__":
                         analyze_and_signal(symbol)
                         time.sleep(3) # 🚨 ANTİ-BAN: Tarama hızı düşürüldü (3 saniye)
             
+                import gc
                 gc.collect()
             else:
                 # --- 3. AŞAMA: LİMİT DOLUYSA BEKLE ---
@@ -349,4 +355,6 @@ if __name__ == "__main__":
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı! Hata: {e}")
+            import time
             time.sleep(10)
+
