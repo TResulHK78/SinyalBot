@@ -292,17 +292,17 @@ def telegram_emri_dinle():
     except Exception as e:
         pass 
 
-# --- ANA DÖNGÜ (HAYALET MODU + TUR SAYACI) ---
+# --- ANA DÖNGÜ (AKILLI HAFIZALI TUR SAYACI) ---
 if __name__ == "__main__":
     keep_alive() 
     print("🤖 HİBRİT BOT BAŞLATILDI. Telegram'a bağlanıyor...")
     try:
-        send_telegram_message("🚀 **Sistem Başlatıldı! (Sessiz Hayalet Modu)**\nAnti-Ban kalkanı devrede.\n`/kapat COIN` ile işlem silebilir, `/analiz COIN` ile piyasa özeti alabilirsiniz.")
+        send_telegram_message("🚀 **Sistem Başlatıldı!**\nAnti-Ban kalkanı devrede.\n`/kapat COIN` ile işlem silebilirsiniz.")
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! {e}")
     
     TAKIP_ARALIGI = 15   
-    tur_sayaci = 1 # 🚨 YENİ: Tur sayacını 1'den başlatıyoruz!
+    tur_sayaci = 1 
     
     while True:
         try:
@@ -313,23 +313,24 @@ if __name__ == "__main__":
             if aktif_islemler:
                 for symbol in list(aktif_islemler.keys()):
                     aktif_islemi_takip_et(symbol)
-                    time.sleep(2) # 🚨 ANTİ-BAN: Takipler arası 2 saniye nefes
+                    time.sleep(2) 
                     
             # --- 2. AŞAMA: BOŞLUK VARSA TARAMA YAP ---
             if len(aktif_islemler) < MAX_ACIK_ISLEM:
                 guncel_coin_listesi = get_all_usdt_futures()
                 
-                # 🚨 FREN: Eğer liste boş döndüyse (IP ban) başa dön ve uykuya geç
                 if not guncel_coin_listesi:
                     continue
                 
-                # 🚨 YENİ: Mesaja tur sayacını ekledik ve her mesajdan sonra sayıyı 1 artırdık
                 try: 
                     send_telegram_message(f"\n🔄 **{tur_sayaci}. PİYASA TURU BAŞLIYOR**\nHedef: {len(guncel_coin_listesi)} Coin | Boş Yer: {MAX_ACIK_ISLEM - len(aktif_islemler)}")
                     tur_sayaci += 1
                 except: pass
             
                 son_takip = time.time() 
+                
+                # 🚨 YENİ AKILLI HAFIZA: Tarama başlamadan önce kasadaki coinlerin isimlerini tam liste olarak aklında tut!
+                baslangic_coinleri = set(aktif_islemler.keys()) 
                 
                 for symbol in guncel_coin_listesi:
                     if time.time() - son_takip >= TAKIP_ARALIGI:
@@ -345,16 +346,24 @@ if __name__ == "__main__":
                         
                     if symbol not in aktif_islemler: 
                         analyze_and_signal(symbol)
-                        time.sleep(3) # 🚨 ANTİ-BAN: Tarama hızı düşürüldü (3 saniye)
+                        time.sleep(3) 
             
+                # 🚨 AKILLI SIFIRLAMA: Taramadan sonraki coin listesiyle baştaki listeyi karşılaştır. 
+                # Eğer isimler değişmişse (yeni işlem girdiyse veya eskisi kapandıysa) sayacı 1 yap!
+                guncel_coinleri = set(aktif_islemler.keys())
+                if baslangic_coinleri != guncel_coinleri:
+                    tur_sayaci = 1
+
                 import gc
                 gc.collect()
             else:
                 # --- 3. AŞAMA: LİMİT DOLUYSA BEKLE ---
+                tur_sayaci = 1 
                 time.sleep(TAKIP_ARALIGI)
 
         except Exception as e:
             print(f"⚠️ Hata yakalandı! Hata: {e}")
             import time
             time.sleep(10)
+
 
