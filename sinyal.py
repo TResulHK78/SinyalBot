@@ -28,8 +28,8 @@ TELEGRAM_TOKEN = os.environ.get("GIZLI_TOKEN", "HAYALET_AVCISI")
 CHAT_ID = "@rhksinyal"
 MAX_ACIK_ISLEM = 3  
 
-KALDIRAC = 10         # Her işlem için kullanılacak kaldıraç (Örn: 10x)
-KASA_YUZDESI = 5      # Her işleme kasanın % kaçıyla girilecek (Örn: %5)
+KALDIRAC = 15         # Her işlem için kullanılacak kaldıraç (Örn: 10x)
+KASA_YUZDESI = 25      # Her işleme kasanın % kaçıyla girilecek (Örn: %5)
 
 # --- BORSAYA BAĞLANTI (BİNANCE FUTURES TESTNET) ---
 exchange = ccxt.binance({
