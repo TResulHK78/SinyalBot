@@ -1,12 +1,12 @@
-    import ccxt
-    import pandas as pd
-    import pandas_ta as ta
-    import requests
-    import time
-    import os
-    import gc
-    from flask import Flask
-    from threading import Thread
+import ccxt
+import pandas as pd
+import pandas_ta as ta
+import requests
+import time
+import os
+import gc
+from flask import Flask
+from threading import Thread
     
     # --- FLASK (SUNUCU UYUTMAMA) AYARLARI ---
     app = Flask('')
