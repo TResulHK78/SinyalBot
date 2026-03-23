@@ -34,6 +34,29 @@ exchange = ccxt.binance({
     'options': {'defaultType': 'future'}
 })
 
+# --- BOT GENEL AYARLARI ---
+TELEGRAM_TOKEN = os.environ.get("GIZLI_TOKEN", "HAYALET_AVCISI")
+CHAT_ID = "@rhksinyal"
+MAX_ACIK_ISLEM = 3  
+
+# --- BORSAYA BAĞLANTI (BİNANCE TESTNET) ---
+exchange = ccxt.binance({
+    'apiKey': 'gHgp17GNuSFfkuKMgV30HVa00QZB8vq8Bgtn1jq6pO0buZTQaacQo7RouYJdWZ29',    # Aldığın API Key'i buraya yapıştır
+    'secret': 'L8xmLgjSeNO1IpWAdMrVzuSEymJoOi7Kb1JTPbAmYRPkJZ3uGqeodj6OvC8aYDyj', # Aldığın Secret Key'i buraya yapıştır
+    'enableRateLimit': True,
+    'options': {'defaultType': 'future'} # Botun LONG/SHORT mantığıyla çalıştığı için Futures ayarı kalmalı
+})
+
+# Testnet modunu (Sandbox) aktif ediyoruz! Bu satır olmazsa gerçek hesaba bağlanmaya çalışır.
+exchange.set_sandbox_mode(True)
+
+# Bağlantıyı kontrol edip terminale yazdıralım
+try:
+    balance = exchange.fetch_balance()
+    print("✅ TESTNET BAĞLANTISI BAŞARILI! Sanal USDT Bakiyesi:", balance['total'].get('USDT', 0))
+except Exception as e:
+    print("❌ BAĞLANTI HATASI! Lütfen API anahtarlarını kontrol et:", e)
+
 # --- BOT HAFIZASI ---
 aktif_islemler = {}  
 kapatilan_islemler = {} # 🚨 1 Saatlik Ceza Tahtası (Aynı coine üst üste girmez)
