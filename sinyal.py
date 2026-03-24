@@ -275,9 +275,6 @@ def analyze_and_signal(symbol):
         rsi_long = rsi < 75
 
         if bollinger_long and trend_long and hacim_long and rsi_long:
-            stop_loss = kapanis - (atr * 2.0) 
-            take_profit = kapanis + (atr * 2.5) 
-            
             try:
                 bakiye_bilgisi = exchange.fetch_balance()
                 mevcut_usdt = float(bakiye_bilgisi['free'].get('USDT', 0))
@@ -291,15 +288,29 @@ def analyze_and_signal(symbol):
                 if max_izin_verilen and alinacak_miktar > float(max_izin_verilen):
                     alinacak_miktar = float(max_izin_verilen)
 
-                # 1. Ana işlemi Limit Emir ile aç
-                exchange.create_limit_buy_order(symbol, alinacak_miktar, kapanis)
+                # 1. Ana işlemi Market (Piyasa) Emir ile aç
+                order = exchange.create_market_buy_order(symbol, alinacak_miktar)
+                
+                # Gerçek giriş fiyatını çek (API ortalama fiyatı döndürmezse Açık Pozisyonlardan çekmeyi dener)
+                gercek_giris = order.get('average')
+                if not gercek_giris:
+                    try:
+                        pozisyonlar = exchange.fetch_positions([symbol])
+                        if pozisyonlar and len(pozisyonlar) > 0:
+                            gercek_giris = pozisyonlar[0].get('entryPrice')
+                    except: pass
+                gercek_giris = float(gercek_giris) if gercek_giris else kapanis
+
+                # Hedef ve stop noktalarını GERÇEK giriş fiyatına göre tekrar hesapla
+                stop_loss = gercek_giris - (atr * 2.0) 
+                take_profit = gercek_giris + (atr * 2.5) 
                 
                 # 2. Borsaya doğrudan Hedef (Take Profit) Limit Emrini gönder
                 try:
                     exchange.create_limit_sell_order(symbol, alinacak_miktar, take_profit, params={'reduceOnly': True})
                 except: pass
                 
-                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder (Zararı kesin kesmek için Market Stop kullanılır)
+                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder
                 try:
                     exchange.create_order(symbol, 'STOP_MARKET', 'sell', alinacak_miktar, params={'stopPrice': stop_loss, 'reduceOnly': True})
                 except: pass
@@ -310,15 +321,15 @@ def analyze_and_signal(symbol):
             
             aktif_islemler[symbol] = {
                 'yon': 'LONG',
-                'giris': kapanis,
+                'giris': gercek_giris,
                 'miktar': alinacak_miktar,
-                'en_iyi_fiyat': kapanis,
+                'en_iyi_fiyat': gercek_giris,
                 'stop': stop_loss,
                 'hedef': take_profit,
                 'atr': atr,
                 'zaman': time.time()
             }
-            send_telegram_message(f"🟢 **OTOMATİK İŞLEM (LONG)** 🟢\n📌 Coin: {symbol}\n💰 Giriş: {kapanis:.4f}\n💸 Marjin: ~{islem_marjini:.2f}$ ({KALDIRAC}x)\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}")
+            send_telegram_message(f"🟢 **OTOMATİK İŞLEM (LONG)** 🟢\n📌 Coin: {symbol}\n💰 Gerçek Giriş: {gercek_giris:.4f}\n💸 Marjin: ~{islem_marjini:.2f}$ ({KALDIRAC}x)\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}")
 
         bollinger_short = kapanis < alt_bant and float(bir_onceki_mum['close']) >= float(bir_onceki_mum[bbl_sutun])
         trend_short = kapanis < ema 
@@ -326,9 +337,6 @@ def analyze_and_signal(symbol):
         rsi_short = rsi > 25
 
         if bollinger_short and trend_short and hacim_short and rsi_short:
-            stop_loss = kapanis + (atr * 2.0)
-            take_profit = kapanis - (atr * 2.5)
-            
             try:
                 bakiye_bilgisi = exchange.fetch_balance()
                 mevcut_usdt = float(bakiye_bilgisi['free'].get('USDT', 0))
@@ -342,8 +350,22 @@ def analyze_and_signal(symbol):
                 if max_izin_verilen and satilacak_miktar > float(max_izin_verilen):
                     satilacak_miktar = float(max_izin_verilen)
 
-                # 1. Ana işlemi Limit Emir ile aç
-                exchange.create_limit_sell_order(symbol, satilacak_miktar, kapanis)
+                # 1. Ana işlemi Market (Piyasa) Emir ile aç
+                order = exchange.create_market_sell_order(symbol, satilacak_miktar)
+                
+                # Gerçek giriş fiyatını çek
+                gercek_giris = order.get('average')
+                if not gercek_giris:
+                    try:
+                        pozisyonlar = exchange.fetch_positions([symbol])
+                        if pozisyonlar and len(pozisyonlar) > 0:
+                            gercek_giris = pozisyonlar[0].get('entryPrice')
+                    except: pass
+                gercek_giris = float(gercek_giris) if gercek_giris else kapanis
+
+                # Hedef ve stop noktalarını GERÇEK giriş fiyatına göre tekrar hesapla
+                stop_loss = gercek_giris + (atr * 2.0)
+                take_profit = gercek_giris - (atr * 2.5)
                 
                 # 2. Borsaya doğrudan Hedef (Take Profit) Limit Emrini gönder
                 try:
@@ -361,15 +383,15 @@ def analyze_and_signal(symbol):
             
             aktif_islemler[symbol] = {
                 'yon': 'SHORT',
-                'giris': kapanis,
+                'giris': gercek_giris,
                 'miktar': satilacak_miktar,
-                'en_iyi_fiyat': kapanis,
+                'en_iyi_fiyat': gercek_giris,
                 'stop': stop_loss,
                 'hedef': take_profit,
                 'atr': atr,
                 'zaman': time.time()
             }
-            send_telegram_message(f"🔴 **OTOMATİK İŞLEM (SHORT)** 🔴\n📌 Coin: {symbol}\n💰 Giriş: {kapanis:.4f}\n💸 Marjin: ~{islem_marjini:.2f}$ ({KALDIRAC}x)\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}")
+            send_telegram_message(f"🔴 **OTOMATİK İŞLEM (SHORT)** 🔴\n📌 Coin: {symbol}\n💰 Gerçek Giriş: {gercek_giris:.4f}\n💸 Marjin: ~{islem_marjini:.2f}$ ({KALDIRAC}x)\n🛡️ Stop: {stop_loss:.4f}\n🎯 Hedef: {take_profit:.4f}")
 
     except Exception as e:
         pass
