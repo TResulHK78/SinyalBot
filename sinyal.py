@@ -83,19 +83,32 @@ def get_all_usdt_futures():
         return []
 
 # --- BORSADA İŞLEM KAPATMA MOTORU ---
-def borsada_islem_kapat(symbol, yon, miktar):
+def borsada_islem_kapat(symbol, yon, miktar, fiyat=None):
     try:
-        if yon == 'LONG':
-            exchange.create_market_sell_order(symbol, miktar, params={'reduceOnly': True}) 
-        elif yon == 'SHORT':
-            exchange.create_market_buy_order(symbol, miktar, params={'reduceOnly': True})  
+        # Önce borsadaki açık TP ve SL emirlerini iptal edelim ki bakiye/pozisyon kilitli kalmasın
+        try:
+            exchange.cancel_all_orders(symbol)
+        except:
+            pass
+            
+        # Eğer bot bir fiyat gönderdiyse LİMİT emirle, göndermediyse (eski sistem) MARKET emirle kapat
+        if fiyat:
+            if yon == 'LONG':
+                exchange.create_limit_sell_order(symbol, miktar, fiyat, params={'reduceOnly': True}) 
+            elif yon == 'SHORT':
+                exchange.create_limit_buy_order(symbol, miktar, fiyat, params={'reduceOnly': True})  
+        else:
+            if yon == 'LONG':
+                exchange.create_market_sell_order(symbol, miktar, params={'reduceOnly': True}) 
+            elif yon == 'SHORT':
+                exchange.create_market_buy_order(symbol, miktar, params={'reduceOnly': True})  
+                
         print(f"✅ BORSADA İŞLEM KAPATILDI: {symbol}")
         return True
     except Exception as e:
         hata_metni = str(e)
-        # Eğer pozisyon borsada zaten kapalıysa (-2022 hatası), döngüye girmemek için başarılı sayıp hafızadan siliyoruz.
         if "-2022" in hata_metni or "ReduceOnly" in hata_metni:
-            send_telegram_message(f"⚠️ {symbol} pozisyonu borsada bulunamadı (zaten kapanmış). Bot hafızasından temizlendi.")
+            send_telegram_message(f"⚠️ {symbol} pozisyonu borsada zaten kapanmış. Hafızadan temizlendi.")
             return True 
         else:
             send_telegram_message(f"❌ {symbol} borsada kapatılamadı! Hata: {e}")
@@ -172,19 +185,19 @@ def aktif_islemi_takip_et(symbol):
             en_iyi = aktif_islemler[symbol]['en_iyi_fiyat']
             
             if guncel_fiyat >= islem['hedef']:
-                if borsada_islem_kapat(symbol, yon, miktar):
-                    send_telegram_message(f"🎯 **HEDEFE ULAŞILDI! (LONG)** 🎯\n{symbol} işlemi başarıyla kapatıldı!")
+                if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                    send_telegram_message(f"🎯 **HEDEFE ULAŞILDI! (LONG)** 🎯\n{symbol} Limit emirle kapatıldı!")
                     del aktif_islemler[symbol] 
                     kapatilan_islemler[symbol] = time.time() 
             elif guncel_fiyat <= islem['stop']:
-                if borsada_islem_kapat(symbol, yon, miktar):
-                    send_telegram_message(f"🛑 **STOP PATLADI (LONG)**\n{symbol} Stop oldu, işlem kapatıldı.")
+                if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                    send_telegram_message(f"🛑 **STOP PATLADI (LONG)**\n{symbol} Stop oldu, Limit emirle kapatıldı.")
                     del aktif_islemler[symbol]
                     kapatilan_islemler[symbol] = time.time() 
             elif en_iyi >= giris + kar_koruma_hedefi: 
                 if guncel_fiyat <= en_iyi - kar_koruma_esnekligi: 
-                    if borsada_islem_kapat(symbol, yon, miktar):
-                        send_telegram_message(f"⚠️ **KÂRI AL VE KAÇ! (LONG)**\n{symbol} dönüşe geçti, kârla kapatıldı!")
+                    if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                        send_telegram_message(f"⚠️ **KÂRI AL VE KAÇ! (LONG)**\n{symbol} dönüşe geçti, karı almak için Limit Emir açıldı!")
                         del aktif_islemler[symbol]
                         kapatilan_islemler[symbol] = time.time() 
 
@@ -194,19 +207,19 @@ def aktif_islemi_takip_et(symbol):
             en_iyi = aktif_islemler[symbol]['en_iyi_fiyat']
             
             if guncel_fiyat <= islem['hedef']:
-                if borsada_islem_kapat(symbol, yon, miktar):
-                    send_telegram_message(f"🎯 **HEDEFE ULAŞILDI! (SHORT)** 🎯\n{symbol} işlemi başarıyla kapatıldı!")
+                if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                    send_telegram_message(f"🎯 **HEDEFE ULAŞILDI! (SHORT)** 🎯\n{symbol} Limit emirle kapatıldı!")
                     del aktif_islemler[symbol]
                     kapatilan_islemler[symbol] = time.time() 
             elif guncel_fiyat >= islem['stop']:
-                if borsada_islem_kapat(symbol, yon, miktar):
-                    send_telegram_message(f"🛑 **STOP PATLADI (SHORT)**\n{symbol} Stop oldu, işlem kapatıldı.")
+                if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                    send_telegram_message(f"🛑 **STOP PATLADI (SHORT)**\n{symbol} Stop oldu, Limit emirle kapatıldı.")
                     del aktif_islemler[symbol]
                     kapatilan_islemler[symbol] = time.time() 
             elif en_iyi <= giris - kar_koruma_hedefi:
                 if guncel_fiyat >= en_iyi + kar_koruma_esnekligi:
-                    if borsada_islem_kapat(symbol, yon, miktar):
-                        send_telegram_message(f"⚠️ **KÂRI AL VE KAÇ! (SHORT)**\n{symbol} yükselişe geçti, kârla kapatıldı!")
+                    if borsada_islem_kapat(symbol, yon, miktar, guncel_fiyat):
+                        send_telegram_message(f"⚠️ **KÂRI AL VE KAÇ! (SHORT)**\n{symbol} yükselişe geçti, karı almak için Limit Emir açıldı!")
                         del aktif_islemler[symbol]
                         kapatilan_islemler[symbol] = time.time() 
 
@@ -274,7 +287,23 @@ def analyze_and_signal(symbol):
                 pozisyon_buyuklugu = (islem_marjini * KALDIRAC) / kapanis
                 alinacak_miktar = float(exchange.amount_to_precision(symbol, pozisyon_buyuklugu))
                 
-                exchange.create_market_buy_order(symbol, alinacak_miktar)
+                max_izin_verilen = exchange.markets[symbol].get('limits', {}).get('amount', {}).get('max')
+                if max_izin_verilen and alinacak_miktar > float(max_izin_verilen):
+                    alinacak_miktar = float(max_izin_verilen)
+
+                # 1. Ana işlemi Limit Emir ile aç
+                exchange.create_limit_buy_order(symbol, alinacak_miktar, kapanis)
+                
+                # 2. Borsaya doğrudan Hedef (Take Profit) Limit Emrini gönder
+                try:
+                    exchange.create_limit_sell_order(symbol, alinacak_miktar, take_profit, params={'reduceOnly': True})
+                except: pass
+                
+                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder (Zararı kesin kesmek için Market Stop kullanılır)
+                try:
+                    exchange.create_order(symbol, 'STOP_MARKET', 'sell', alinacak_miktar, params={'stopPrice': stop_loss, 'reduceOnly': True})
+                except: pass
+                
             except Exception as e:
                 send_telegram_message(f"❌ {symbol} LONG emri başarısız! Hata: {e}")
                 return 
@@ -309,7 +338,23 @@ def analyze_and_signal(symbol):
                 pozisyon_buyuklugu = (islem_marjini * KALDIRAC) / kapanis
                 satilacak_miktar = float(exchange.amount_to_precision(symbol, pozisyon_buyuklugu))
                 
-                exchange.create_market_sell_order(symbol, satilacak_miktar)
+                max_izin_verilen = exchange.markets[symbol].get('limits', {}).get('amount', {}).get('max')
+                if max_izin_verilen and satilacak_miktar > float(max_izin_verilen):
+                    satilacak_miktar = float(max_izin_verilen)
+
+                # 1. Ana işlemi Limit Emir ile aç
+                exchange.create_limit_sell_order(symbol, satilacak_miktar, kapanis)
+                
+                # 2. Borsaya doğrudan Hedef (Take Profit) Limit Emrini gönder
+                try:
+                    exchange.create_limit_buy_order(symbol, satilacak_miktar, take_profit, params={'reduceOnly': True})
+                except: pass
+                
+                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder
+                try:
+                    exchange.create_order(symbol, 'STOP_MARKET', 'buy', satilacak_miktar, params={'stopPrice': stop_loss, 'reduceOnly': True})
+                except: pass
+
             except Exception as e:
                 send_telegram_message(f"❌ {symbol} SHORT emri başarısız! Hata: {e}")
                 return
