@@ -85,7 +85,6 @@ def get_all_usdt_futures():
 # --- BORSADA İŞLEM KAPATMA MOTORU ---
 def borsada_islem_kapat(symbol, yon, miktar):
     try:
-        # reduceOnly: True parametresi borsaya "sadece açık işlemi kapat" emri verir!
         if yon == 'LONG':
             exchange.create_market_sell_order(symbol, miktar, params={'reduceOnly': True}) 
         elif yon == 'SHORT':
@@ -93,8 +92,14 @@ def borsada_islem_kapat(symbol, yon, miktar):
         print(f"✅ BORSADA İŞLEM KAPATILDI: {symbol}")
         return True
     except Exception as e:
-        send_telegram_message(f"❌ {symbol} borsada kapatılamadı! Hata: {e}")
-        return False
+        hata_metni = str(e)
+        # Eğer pozisyon borsada zaten kapalıysa (-2022 hatası), döngüye girmemek için başarılı sayıp hafızadan siliyoruz.
+        if "-2022" in hata_metni or "ReduceOnly" in hata_metni:
+            send_telegram_message(f"⚠️ {symbol} pozisyonu borsada bulunamadı (zaten kapanmış). Bot hafızasından temizlendi.")
+            return True 
+        else:
+            send_telegram_message(f"❌ {symbol} borsada kapatılamadı! Hata: {e}")
+            return False
 
 # --- MANUEL ÖZEL ANALİZ ---
 def ozel_analiz_yap(symbol):
