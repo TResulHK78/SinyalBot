@@ -310,7 +310,7 @@ def analyze_and_signal(symbol):
                     exchange.create_limit_sell_order(symbol, alinacak_miktar, take_profit, params={'reduceOnly': True})
                 except: pass
                 
-                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder
+                # 3. Borsaya doğrudan Stop (Stop Market) Emrini gönder (Zararı kesin kesmek için Market Stop kullanılır)
                 try:
                     exchange.create_order(symbol, 'STOP_MARKET', 'sell', alinacak_miktar, params={'stopPrice': stop_loss, 'reduceOnly': True})
                 except: pass
@@ -449,6 +449,45 @@ if __name__ == "__main__":
         send_telegram_message("🚀 **Tam Otonom Sistem Başlatıldı!**\nSinyaller doğrudan Testnet'e iletilecek.\n`/kapat COIN` ile işlemi borsada anında kapatabilirsiniz.\n`/analiz COIN` ile özel analiz yapabilirsiniz.")
     except Exception as e:
         print(f"❌ TELEGRAM HATASI! {e}")
+        
+    # --- AÇIK POZİSYONLARI HAFIZAYA GERİ YÜKLEME ---
+    try:
+        print("🔄 Borsadaki açık pozisyonlar kontrol ediliyor...")
+        pozisyonlar = exchange.fetch_positions()
+        kurtarilan_sayi = 0
+        for poz in pozisyonlar:
+            miktar = float(poz.get('contracts', 0))
+            if miktar > 0:
+                symbol = poz['symbol']
+                yon = 'LONG' if poz['side'] == 'long' else 'SHORT'
+                giris = float(poz['entryPrice'])
+                
+                # Hafıza için ATR verisini çekelim
+                bars = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=150)
+                df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                for c in ['high', 'low', 'close']: df[c] = pd.to_numeric(df[c], errors='coerce')
+                df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+                atr = float(df.iloc[-2]['atr']) if not pd.isna(df.iloc[-2]['atr']) else (giris * 0.01)
+                
+                stop_loss = giris - (atr * 2.0) if yon == 'LONG' else giris + (atr * 2.0)
+                take_profit = giris + (atr * 2.5) if yon == 'LONG' else giris - (atr * 2.5)
+                
+                aktif_islemler[symbol] = {
+                    'yon': yon,
+                    'giris': giris,
+                    'miktar': miktar,
+                    'en_iyi_fiyat': giris,
+                    'stop': stop_loss,
+                    'hedef': take_profit,
+                    'atr': atr,
+                    'zaman': time.time()
+                }
+                kurtarilan_sayi += 1
+        if kurtarilan_sayi > 0:
+            send_telegram_message(f"♻️ **Hafıza Kurtarıldı!**\nBorsada açık olan {kurtarilan_sayi} işlem bota geri yüklendi.")
+    except Exception as e:
+        print(f"⚠️ Açık pozisyonlar kurtarılamadı: {e}")
+    # -----------------------------------------------
     
     TAKIP_ARALIGI = 15   
     tur_sayaci = 1 
